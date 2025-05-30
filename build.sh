@@ -1,6 +1,7 @@
 #!/bin/bash
 
-detected_memory=0xF000
+kernel_location=0xC600
+detected_memory=0x1F000
 
 AS="nasm"
 CC="clang"
@@ -9,7 +10,7 @@ LD="ld.lld"
 ABFLAGS="-f bin"
 AOFLAGS="-f elf64"
 CFLAGS="-ffreestanding -target x86_64-none-elf"
-LFLAGS="-Ttext 0x8200 --defsym=DETECTED_MEMORY=$detected_memory --oformat binary"
+LFLAGS="-Ttext $kernel_location --defsym=DETECTED_MEMORY=$detected_memory --defsym=BPB=0x7C00 --oformat binary"
 
 SRC=src
 BOOT=$SRC/bootloader
@@ -46,16 +47,18 @@ function all {
 
     $AS $AOFLAGS $KERNEL/entry.s -o $OBJ/kernel/entry.o
     $AS $AOFLAGS $KERNEL/cpu/interrupts.s -o $OBJ/kernel/interrupts.o
+    set -x
     $LD $LFLAGS $OBJ/kernel/entry.o $OBJ/kernel/interrupts.o "${OBJSK[@]}" -o $BIN/kernel.bin
+    set +x
 
     kernel_size=$(wc -c < $BIN/kernel.bin)
     kernel_sectors=$((($kernel_size + 511) / 512))
 
-    $AS $ABFLAGS $BOOT/boot.s -D KERNEL_SIZE=$kernel_sectors -D DETECTED_MEMORY=$detected_memory -o $BIN/boot.bin
+    $AS $ABFLAGS $BOOT/boot.s -D KERNEL_LOCATION=$kernel_location -D KERNEL_SIZE=$kernel_sectors -D DETECTED_MEMORY=$detected_memory -o $BIN/boot.bin
     bootloader_size=$(wc -c < $BIN/boot.bin)
     bootloader_sectors=$((($bootloader_size + 511) / 512))
 
-    dd if=/dev/zero of=$OUTPUT bs=512 count=2880
+    dd if=/dev/zero of=$OUTPUT bs=512 count=131072
     dd if=$BIN/boot.bin of=$OUTPUT conv=notrunc
     dd if=$BIN/kernel.bin of=$OUTPUT bs=512 seek=$bootloader_sectors conv=notrunc
 }

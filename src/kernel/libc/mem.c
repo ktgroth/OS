@@ -7,16 +7,16 @@
 extern uint64_t DETECTED_MEMORY;
 
 mmap_t *mbuffer[256];
-uint64_t free_mem_addr = 0x10000;
+uint64_t free_mem_addr = 0x40000;
 
 void init_memory() {
     mmap_t *buffer = (mmap_t *)&DETECTED_MEMORY;
     uint32_t i = 0;
-    while (buffer[i].base + buffer[i++].length) {
+    while (buffer[i].base + buffer[i].length) {
         uint64_t base = buffer[i].base;
         uint64_t length = buffer[i].length;
         uint32_t type = buffer[i].type;
-        uint32_t ACPI = buffer[i].ACPI;
+        uint32_t ACPI = buffer[i++].ACPI;
         
         char base_str[66] = "";
         char length_str[32] = "";

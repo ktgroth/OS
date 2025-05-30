@@ -2,6 +2,7 @@
 #include "include/cpu/idt.h"
 #include "include/cpu/isr.h"
 #include "include/driver/vga.h"
+#include "include/driver/fat32.h"
 #include "include/libc/mem.h"
 #include "include/libc/stdlib.h"
 #include "include/libc/string.h"
@@ -14,6 +15,7 @@ int main() {
     isr_install();
     irq_install();
     init_memory();
+    init_bpb();
 
     putstr("Type something, it will go through the kernel\n"
            "Type END to halt the CPU\n> ", COLOR_WHT, COLOR_BLK);

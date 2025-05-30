@@ -15,6 +15,7 @@ detect_mem:
     mov edi, E820_BUFFER
     push word di
     shr edi, 0x10
+    shl edi, 0x0C
     mov es, di
     pop word di
 
