@@ -37,8 +37,10 @@ static void keyboard_callback(registers_t regs) {
     if (scancode > SC_MAX)
         return;
     if (scancode == BACKSPACE) {
-        backspace(key_buffer);
-        putchar('\b', COLOR_WHT, COLOR_BLK);
+        if (key_buffer[0]) {
+            backspace(key_buffer);
+            putchar('\b', COLOR_WHT, COLOR_BLK);
+        }
     } else if (scancode == ENTER) {
         putchar('\n', COLOR_WHT, COLOR_BLK);
         user_input(key_buffer);
