@@ -302,6 +302,6 @@ void *krealloc(void *src, uint64_t n) {
 }
 
 void kfree(void *src) {
-    free_physical_page(src);
+    free_physical_page(get_paddr(src));
 }
 
