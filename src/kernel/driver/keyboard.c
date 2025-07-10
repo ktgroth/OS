@@ -5,7 +5,7 @@
 #include "../include/driver/vga.h"
 #include "../include/libc/function.h"
 #include "../include/libc/string.h"
-#include "../include/libc/mem.h"
+#include "../include/libc/memory.h"
 #include "../include/kernel.h"
 
 

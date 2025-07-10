@@ -127,6 +127,9 @@ void isr_handler(registers_t r) {
     putstr("\n", COLOR_WHT, COLOR_RED);
     putstr(exception_messages[r.irq_number], COLOR_WHT, COLOR_RED);
     putstr("\n", COLOR_WHT, COLOR_RED);
+
+    for (;;)
+        __asm__ __volatile__("hlt");
 }
 
 void register_interrupt_handler(uint8_t n, isr_t handler) {

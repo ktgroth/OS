@@ -3,19 +3,24 @@
 #include "include/cpu/isr.h"
 #include "include/driver/vga.h"
 #include "include/driver/fat32.h"
-#include "include/libc/mem.h"
+#include "include/libc/memory.h"
 #include "include/libc/stdlib.h"
 #include "include/libc/string.h"
 #include "include/kernel.h"
 
+extern void *alloc_physical_page();
+
 int main() {
     set_cursor_pos(0, 0);
     clearwin(COLOR_WHT, COLOR_BLK);
-    
+
     isr_install();
     irq_install();
     init_memory();
+    init_page_table();
+    init_kalloc(0x100000, 8);
     init_bpb();
+    init_fats_root();
 
     putstr("Type something, it will go through the kernel\n"
            "Type END to halt the CPU\n> ", COLOR_WHT, COLOR_BLK);
@@ -34,19 +39,27 @@ void user_input(char *input) {
         putstr("Stopping the CPU.\n", COLOR_WHT, COLOR_BLK);
         hide_cursor();
         __asm__ __volatile__("hlt");
-    } else if (!strcmp(input, "PAGE")) {
-        uint64_t phys_addr;
-        uint64_t page = malloc(1000, 1, &phys_addr);
-        char page_str[66] = "";
-        hex_to_ascii(page, page_str);
+    } else if (!strncmp(input, "PAGE", strlen("PAGE"))) {
+        char *n = input + strlen("PAGE") + 1;
+        uint64_t v = ascii_to_int(n);
+
+        uint64_t *virt_addr = (uint64_t *)kmalloc(v);
+        uint64_t *phys_addr = (uint64_t *)get_paddr(virt_addr);
+        char virt_str[66] = "";
+        hex_to_ascii((uint64_t)virt_addr, virt_str);
 
         char phys_str[66] = "";
-        hex_to_ascii(phys_addr, phys_str);
+        hex_to_ascii((uint64_t)phys_addr, phys_str);
 
-        putstr("Page: ", COLOR_WHT, COLOR_BLK);
-        putstr(page_str, COLOR_WHT, COLOR_BLK);
-        putstr(", Physical Address: ", COLOR_WHT, COLOR_BLK);
+        putstr("VAddr: ", COLOR_WHT, COLOR_BLK);
+        putstr(virt_str, COLOR_WHT, COLOR_BLK);
+        putstr(", PAddr: ", COLOR_WHT, COLOR_BLK);
         putstr(phys_str, COLOR_WHT, COLOR_BLK);
+        putstr("\n> ", COLOR_WHT, COLOR_BLK);
+    } else if (!strcmp(input, "PWD")) {
+        char cwd[12] = "";
+        getcwd(cwd);
+        putstr(cwd, COLOR_WHT, COLOR_BLK);
         putstr("\n> ", COLOR_WHT, COLOR_BLK);
     } else {
         putstr("You said: ", COLOR_WHT, COLOR_BLK);

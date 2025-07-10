@@ -1,0 +1,6 @@
+set architecture i386:x86-64
+symbol-file bin/kernel.elf
+target remote localhost:1234
+break _start
+break user_input
+c

@@ -4,7 +4,7 @@
 
 #include "types.h"
 
-void memcpy(uint8_t *src, uint8_t *dest, uint32_t n);
-void memset(uint8_t *dest, uint8_t val, uint32_t n);
+void memcpy(uint8_t *src, uint8_t *dest, uint64_t n);
+void memset(uint8_t *dest, uint8_t val, uint64_t n);
 
 #endif

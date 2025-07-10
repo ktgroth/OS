@@ -45,7 +45,35 @@ typedef struct __attribute__((packed)) {
     uint32_t trail_signature;
 } fs_info_t;
 
+
+#define READ_ONLY   0x01
+#define HIDDEN      0x02
+#define SYSTEM      0x04
+#define VOLUME_ID   0x08
+#define DIRECTORY   0x10
+#define ARCHIVE     0x20
+#define LFN         READ_ONLY | HIDDEN | SYSTEM | VOLUME_ID
+
+typedef struct __attribute__((packed)) {
+    char name[11];
+    uint8_t flags;
+    uint8_t reserved;
+    uint16_t ctime;
+    uint16_t cdate;
+    uint16_t ladate;
+    uint16_t first_cluster_high;
+    uint16_t lmtime;
+    uint16_t lmdate;
+    uint16_t first_cluster_low;
+    uint32_t bytes;
+} directory_t;
+
+
 void init_bpb();
-void init_fats();
+void init_fats_root();
+
+void getcwd(char *str);
+char *rnsectors(uint64_t lba, uint64_t n);
+directory_t *read_directory(char *path);
 
 #endif
