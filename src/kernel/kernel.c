@@ -10,6 +10,9 @@
 
 extern void *alloc_physical_page();
 
+#define HEAP_BASE 0xFFFF800000100000ULL
+#define HEAP_PAGES 0x400
+
 int main() {
     set_cursor_pos(0, 0);
     clearwin(COLOR_WHT, COLOR_BLK);
@@ -18,7 +21,7 @@ int main() {
     irq_install();
     init_memory();
     init_page_table();
-    init_kalloc(0x100000, 8);
+    init_kalloc(HEAP_BASE, HEAP_PAGES);
     init_bpb();
     init_fats_root();
 
@@ -39,11 +42,8 @@ void user_input(char *input) {
         putstr("Stopping the CPU.\n", COLOR_WHT, COLOR_BLK);
         hide_cursor();
         __asm__ __volatile__("hlt");
-    } else if (!strncmp(input, "PAGE", strlen("PAGE"))) {
-        char *n = input + strlen("PAGE") + 1;
-        uint64_t v = ascii_to_int(n);
-
-        uint64_t *virt_addr = (uint64_t *)kmalloc(v);
+    } else if (!strncmp(input, "ALLOC", strlen("ALLOC"))) {
+        uint32_t *virt_addr = (uint32_t *)kmalloc(0x1000);
         uint64_t *phys_addr = (uint64_t *)get_paddr(virt_addr);
         char virt_str[66] = "";
         hex_to_ascii((uint64_t)virt_addr, virt_str);

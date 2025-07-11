@@ -68,7 +68,7 @@ function run {
 
 function debug {
     all
-    qemu-system-x86_64 -hda $OUTPUT -monitor stdio -no-reboot -d in_asm,cpu_reset -D qemu.log
+    qemu-system-x86_64 -hda $OUTPUT -monitor stdio -no-reboot -d in_asm,cpu_reset -D qemu.log -m 2G
     #qemu-system-x86_64 -hda $OUTPUT -S -gdb tcp::1234 -no-reboot -d in_asm,cpu_reset -D qemu.log &
     #gdb -x debug_setup
 }

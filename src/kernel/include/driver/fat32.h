@@ -73,7 +73,10 @@ void init_bpb();
 void init_fats_root();
 
 void getcwd(char *str);
-char *rnsectors(uint64_t lba, uint64_t n);
+void *rnsectors(uint64_t lba, uint64_t n);
+void wnsectors(uint64_t lba, void *buffer, uint64_t n);
+
 directory_t *read_directory(char *path);
+
 
 #endif

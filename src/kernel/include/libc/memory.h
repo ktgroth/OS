@@ -2,28 +2,15 @@
 #ifndef LIBC_MEMORY
 #define LIBC_MEMORY
 
-typedef struct __attribute__((packed)) {
-    uint8_t present     : 1;
-    uint8_t rw          : 1;
-    uint8_t user        : 1;
-    uint8_t pwt         : 1;
-    uint8_t pcd         : 1;
-    uint8_t accessed    : 1;
-    uint8_t ignored1    : 1;
-    uint8_t page_size   : 1;
-    uint64_t ignored2   : 4;
-    uint64_t addr       : 48;
-    uint64_t zeros      : 3;
-    uint64_t nx         : 1;
-} pml4_t, pdpt_t, pdt_t, pt_t, page_t;
+typedef struct {
+    uint64_t flags      : 12;
+    uint64_t addr       : 40;
+    uint64_t zeros      : 11;
+    uint64_t xd         : 1;
+} pml4_t, pdpt_t, pdt_t, pt_t;
 
-typedef struct __attribute__((packed)) {
-    
-} block_t;
-
-
-extern page_t PAGE_TABLE;
-static page_t *page_table;
+extern pml4_t PAGE_TABLE[];
+static pml4_t *page_table;
 
 void init_memory();
 void init_page_table();

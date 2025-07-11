@@ -14,6 +14,12 @@
 #define BIT_SET(arr, bit)   (arr[(bit) / 8] |= (1 << ((bit) % 8)))
 #define BIT_CLEAR(arr, bit) (arr[(bit) / 8] &= ~(1 << ((bit) % 8)))
 
+#define VADDR_OFFSET(x) ((x) & 0xFFF)
+#define VADDR_PT(x)     (((x) >> 12) & 0x1FF)
+#define VADDR_PDT(x)    (((x) >> 21) & 0x1FF)
+#define VADDR_PDPT(x)   (((x) >> 30) & 0x1FF)
+#define VADDR_PML4(x)   (((x) >> 39) & 0x1FF)
+
 #define PAGE_PRESENT    0x01
 #define PAGE_RW         0x02
 #define PAGE_USER       0x04
@@ -23,15 +29,6 @@
 #define PAGE_FLAGS_MASK 0xFFF
 
 #define KMALLOC_ALIGN   0x08
-
-typedef struct {
-    uint64_t offset     : 12;
-    uint64_t pt         : 9;
-    uint64_t pdt        : 9;
-    uint64_t pdpt       : 9;
-    uint64_t pml4       : 9;
-    uint64_t sign       : 16;
-} vaddr_t;
 
 typedef struct {
     uint64_t base;
@@ -45,6 +42,7 @@ static uint8_t page_bitmap[BITMAP_SIZE];
 static uint64_t heap_start;
 static uint64_t heap_end;
 static uint64_t heap_current;
+static uint64_t phys_base_addr;
 
 extern mmap_t DETECTED_MEMORY;
 
@@ -59,8 +57,11 @@ void init_memory() {
         uint32_t ACPI = buffer[i++].ACPI;
  
         char base_str[66] = "";
-        char length_str[32] = "";
-        char type_str[2] = "";
+        char length_str[66] = "";
+        char type_str[66] = "";
+
+        if (type == 1 && phys_base_addr == 0)
+            phys_base_addr = base;
 
         hex_to_ascii(base, base_str);
         hex_to_ascii(length, length_str);
@@ -77,7 +78,7 @@ void init_memory() {
 }
 
 void init_page_table() {
-    page_table = &PAGE_TABLE;
+    page_table = PAGE_TABLE;
     memset(page_bitmap, 0, BITMAP_SIZE);
 }
 
@@ -85,7 +86,7 @@ pt_t *alloc_physical_page() {
     for (uint64_t i = 0; i < MAX_PHYS_PAGES; ++i) {
         if (!BIT_TEST(page_bitmap, i)) {
             BIT_SET(page_bitmap, i);
-            uint64_t *paddr = (uint64_t *)(heap_current + (i * PAGE_SIZE));
+            uint64_t *paddr = (uint64_t *)(phys_base_addr + (i * PAGE_SIZE));
             return (void *)paddr;
         }
     }
@@ -95,10 +96,10 @@ pt_t *alloc_physical_page() {
 
 void free_physical_page(void *page) {
     uint64_t addr = (uint64_t)page;
-    if (addr < heap_current)
+    if (addr < phys_base_addr)
         return;
 
-    uint64_t index = ((uint64_t)addr - (uint64_t)heap_start) / PAGE_SIZE;
+    uint64_t index = (addr - phys_base_addr) / PAGE_SIZE;
     if (index >= MAX_PHYS_PAGES)
         return;
 
@@ -112,142 +113,121 @@ pt_t *alloc_page_table() {
 }
 
 void *get_paddr(void *vaddr) {
-    vaddr_t addr = *(vaddr_t *)&vaddr;
+    uint64_t addr = (uint64_t)vaddr;
+    uint64_t pt_idx = VADDR_PT(addr);
+    uint64_t pdt_idx = VADDR_PDT(addr);
+    uint64_t pdpt_idx = VADDR_PDPT(addr);
+    uint64_t pml4_idx = VADDR_PML4(addr);
 
     pml4_t *pml4 = page_table;
-    if (!pml4[addr.pml4].present) {
+    if (!(pml4[pml4_idx].flags & PAGE_PRESENT)) {
         putstr("PML4E not present\n", COLOR_WHT, COLOR_BLK);
         return NULL;
     }
 
-    pdpt_t *pdpt = (pdpt_t *)(pml4[addr.pml4].addr << 12);
-    if (!pdpt[addr.pdpt].present) {
+    pdpt_t *pdpt = (pdpt_t *)(pml4[pml4_idx].addr << 12);
+    if (!(pdpt[pdpt_idx].flags & PAGE_PRESENT)) {
         putstr("PDPTE not present\n", COLOR_WHT, COLOR_BLK);
         return NULL;
     }
 
-    pdt_t *pdt = (pdt_t *)(pdpt[addr.pdpt].addr << 12);
-    if (!pdt[addr.pdt].present) {
+    pdt_t *pdt = (pdt_t *)(pdpt[pdpt_idx].addr << 12);
+    if (!(pdt[pdt_idx].flags & PAGE_PRESENT)) {
         putstr("PDTE not present\n", COLOR_WHT, COLOR_BLK);
         return NULL;
     }
 
-    pt_t *pt = (pt_t *)(pdt[addr.pdt].addr << 12);
-    if (!pt[addr.pt].present) {
+    pt_t *pt = (pt_t *)(pdt[pdt_idx].addr << 12);
+    if (!(pt[pt_idx].flags & PAGE_PRESENT)) {
         putstr("Page not present\n", COLOR_WHT, COLOR_BLK);
         return NULL;
     }
 
-    uint64_t pbase = (uint64_t)(pt[addr.pt].addr << 12);
-    return (void *)(pbase + addr.offset);
+    uint64_t pbase = (pt[pt_idx].addr << 12);
+    return (void *)(pbase + VADDR_OFFSET(addr));
 }
 
 void map_page(void *paddr, void *vaddr, uint8_t flags) {
-    vaddr_t addr = *(vaddr_t *)&vaddr;
+    uint64_t addr = (uint64_t)vaddr;
+    uint64_t pt_idx = VADDR_PT(addr);
+    uint64_t pdt_idx = VADDR_PDT(addr);
+    uint64_t pdpt_idx = VADDR_PDPT(addr);
+    uint64_t pml4_idx = VADDR_PML4(addr);
 
     pml4_t *pml4 = page_table;
-    if (!pml4[addr.pml4].present) {
-        pml4_t *new_pdpt = alloc_page_table();
-        pml4[addr.pml4] = (pdt_t){
-            .present = flags & PAGE_PRESENT,
-            .rw = flags & PAGE_RW,
-            .user = flags & PAGE_USER,
-            .pwt = flags & PAGE_PWT,
-            .pcd = flags & PAGE_PCD,
-            .accessed = flags & PAGE_ACCESSED,
-            .ignored1 = 0,
-            .page_size = 0,
-            .ignored2 = 0,
-            .addr = (uint64_t)new_pdpt >> 12,
-            .zeros = 0,
-            .nx = 0
+    if (!(pml4[pml4_idx].flags & PAGE_PRESENT)) {
+        pdpt_t *new_pdpt = alloc_page_table();
+        pml4[pml4_idx] = (pdpt_t){
+            .flags      =flags,
+            .addr       =(uint64_t)new_pdpt >> 12,
+            .zeros      =0,
+            .xd         =0
         };
     }
 
-    pdpt_t *pdpt = (pdpt_t *)((uint64_t)pml4[addr.pdpt].addr << 12);
-    if (!pdpt[addr.pdpt].present) {
-        pdpt_t *new_pdt = alloc_page_table();
-        pdpt[addr.pdpt] = (pdt_t){
-            .present = flags & PAGE_PRESENT,
-            .rw = flags & PAGE_RW,
-            .user = flags & PAGE_USER,
-            .pwt = flags & PAGE_PWT,
-            .pcd = flags & PAGE_PCD,
-            .accessed = flags & PAGE_ACCESSED,
-            .ignored1 = 0,
-            .page_size = 0,
-            .ignored2 = 0,
-            .addr = (uint64_t)new_pdt >> 12,
-            .zeros = 0,
-            .nx = 0
+    pdpt_t *pdpt = (pdpt_t *)(pml4[pml4_idx].addr << 12);
+    if (!(pdpt[pdpt_idx].flags & PAGE_PRESENT)) {
+        pt_t *new_pdt = alloc_page_table();
+        pdpt[pdpt_idx] = (pdt_t){
+            .flags      =flags,
+            .addr       =(uint64_t)new_pdt >> 12,
+            .zeros      =0,
+            .xd         =0
         };
     }
 
-    pdt_t *pdt = (pdt_t *)((uint64_t)pdpt[addr.pdt].addr << 12);
-    if (!pdt[addr.pdt].present) {
-        pdt_t *new_pt = alloc_page_table();
-        pdt[addr.pdt] = (pdt_t){
-            .present = flags & PAGE_PRESENT,
-            .rw = flags & PAGE_RW,
-            .user = flags & PAGE_USER,
-            .pwt = flags & PAGE_PWT,
-            .pcd = flags & PAGE_PCD,
-            .accessed = flags & PAGE_ACCESSED,
-            .ignored1 = 0,
-            .page_size = 0,
-            .ignored2 = 0,
-            .addr = (uint64_t)new_pt >> 12,
-            .zeros = 0,
-            .nx = 0
+    pdt_t *pdt = (pdt_t *)(pdpt[pdpt_idx].addr << 12);
+    if (!(pdt[pdt_idx].flags & PAGE_PRESENT)) {
+        pt_t *new_pt = alloc_page_table();
+        pdt[pdt_idx] = (pt_t){
+            .flags      =flags,
+            .addr       =(uint64_t)new_pt >> 12,
+            .zeros      =0,
+            .xd         =0
         };
     }
 
-    pt_t *pt = (pt_t *)((uint64_t)pdt[addr.pdt].addr << 12);
-    pt[addr.pt] = (pt_t){
-        .present = flags & PAGE_PRESENT,
-        .rw = flags & PAGE_RW,
-        .user = flags & PAGE_USER,
-        .pwt = flags & PAGE_PWT,
-        .pcd = flags & PAGE_PCD,
-        .accessed = flags & PAGE_ACCESSED,
-        .ignored1 = 0,
-        .page_size = 0,
-        .ignored2 = 0,
-        .addr = (uint64_t)paddr >> 12,
-        .zeros = 0,
-        .nx = 0
-    };
+    pt_t *pt = (pt_t *)(pdt[pdt_idx].addr << 12);
+    pt[pt_idx] = (pdpt_t){
+            .flags      =flags,
+            .addr       =(uint64_t)paddr >> 12,
+            .zeros      =0,
+            .xd         =0
+        };
+
+    __asm__ __volatile__(
+        "invlpg (%0)"
+        :
+        : "r"(addr)
+        : "memory"
+    );
 }
 
 void unmap_page(void *vaddr) {
-    vaddr_t addr = *(vaddr_t *)&vaddr;
+    uint64_t addr = (uint64_t)vaddr;
+    uint64_t pt_idx = VADDR_PT(addr);
+    uint64_t pdt_idx = VADDR_PDT(addr);
+    uint64_t pdpt_idx = VADDR_PDPT(addr);
+    uint64_t pml4_idx = VADDR_PML4(addr);
 
     pml4_t *pml4 = page_table;
-    if (!pml4[addr.pml4].present)
+    if (!(pml4[pml4_idx].flags & PAGE_PRESENT))
         return;
 
-    pdpt_t *pdpt = (pdpt_t *)(pml4[addr.pml4].addr << 12);
-    if (!pdpt[addr.pdpt].present)
+    pdpt_t *pdpt = (pdpt_t *)(pml4[pml4_idx].addr << 12);
+    if (!(pdpt[pdpt_idx].flags & PAGE_PRESENT))
         return;
 
-    pdt_t *pdt = (pdt_t *)(pdpt[addr.pdpt].addr << 12);
-    if (!pdt[addr.pdt].present)
+    pdt_t *pdt = (pdt_t *)(pdpt[pdpt_idx].addr << 12);
+    if (!(pdt[pdt_idx].flags & PAGE_PRESENT))
         return;
 
-    pt_t * pt = (pt_t *)(pdt[addr.pdt].addr << 12);
-    pt[addr.pt] = (pt_t){
-        .present=0,
-        .rw=0,
-        .user=0,
-        .pwt=0,
-        .pcd=0,
-        .accessed=0,
-        .ignored1=0,
-        .page_size=0,
-        .ignored2=0,
-        .addr=0,
-        .zeros=0,
-        .nx=0
+    pt_t * pt = (pt_t *)(pdt[pdt_idx].addr << 12);
+    pt[pt_idx] = (pt_t){
+        .flags  =0,
+        .addr   =0,
+        .zeros  =0,
+        .xd     =0
     };
 
     __asm__ __volatile__("invlpg (%0)" ::"r"(vaddr) : "memory");
@@ -295,8 +275,11 @@ void *kcalloc(uint64_t n, uint64_t size) {
 }
 
 void *krealloc(void *src, uint64_t n) {
+    if (!src)
+        return kmalloc(n);
+
     void *addr = kmalloc(n);
-    memcpy(src, addr, n);
+    memcpy(addr, src, n);
     kfree(src);
     return addr;
 }
