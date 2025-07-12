@@ -3,6 +3,7 @@
 #include "include/cpu/isr.h"
 #include "include/driver/vga.h"
 #include "include/driver/fat32.h"
+#include "include/driver/storage.h"
 #include "include/libc/memory.h"
 #include "include/libc/stdlib.h"
 #include "include/libc/string.h"
@@ -10,7 +11,7 @@
 
 extern void *alloc_physical_page();
 
-#define HEAP_BASE 0xFFFF800000100000ULL
+#define HEAP_BASE 0xFFFF800000000000ULL
 #define HEAP_PAGES 0x400
 
 int main() {
@@ -57,8 +58,7 @@ void user_input(char *input) {
         putstr(phys_str, COLOR_WHT, COLOR_BLK);
         putstr("\n> ", COLOR_WHT, COLOR_BLK);
     } else if (!strcmp(input, "PWD")) {
-        char cwd[12] = "";
-        getcwd(cwd);
+        char *cwd = getcwd();
         putstr(cwd, COLOR_WHT, COLOR_BLK);
         putstr("\n> ", COLOR_WHT, COLOR_BLK);
     } else {

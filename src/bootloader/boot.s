@@ -3,9 +3,9 @@
 
 JUMP_BOOT_RECORD:       db 0xEB, 0x3C, 0x90
 OEM_IDENTIFIER:         db 'FRDOS5.1'
-BYTES_PER_SECTOR:       dw 0x0200
-SECTORS_PER_CLUSTER:    db 0x02
-RESERVED_SECTORS:       dw 0x0008
+BYTES_PER_SECTOR:       dw 0x1000
+SECTORS_PER_CLUSTER:    db 0x04
+RESERVED_SECTORS:       dw 0x0003
 FILE_ALLOCATION_TABLES: db 0x02
 ROOT_DIRECTORY_ENTIRES: dw 0x00E0
 TOTAL_SECTORS:          dw 0x0000
@@ -14,9 +14,9 @@ SECTORS_PER_FAT:        dw 0x0009
 SECTORS_PER_TRACK:      dw 0x0012
 HEADS:                  dw 0x0002
 HIDDEN_SECTORS:         dd 0x00000000
-LARGE_SECTOR_COUNT:     dd 0x00020000
+LARGE_SECTOR_COUNT:     dd 0x00400000
 
-SECTORS_PER_FAT32:      dd 0x00002000
+SECTORS_PER_FAT32:      dd 0x00400000
 EXT_FLAGS:              dw 0x0000
 FS_VERSION:             dw 0x0000
 ROOT_CLUSTER:           dd 0x00000002
@@ -83,6 +83,27 @@ times 512-($-fsinfo_sector) db 0x00
 
 RESERVED_SECTOR1:
 times 512-($-RESERVED_SECTOR1) db 0x00
+
+
+FATS:
+; #FATS * SPF * BPS
+times (18 * 512)-($-FATS) db 0x00
+
+
+ROOT_DIRECTORY:
+; (#RDE * 32 - 1) / BPS
+
+HOME_DIRECTORY:
+NAME: db 'HOME'
+times 11-($-NAME) db 0x00
+FLAGS: db 0x10
+times 8 db 0x00
+FC_HIGH: db 0x3D
+times 4 db 0x00
+FC_LOW: db 0x00
+BYTES: db 0x00000000
+
+times (15 * 512)-($-ROOT_DIRECTORY) db 0x00
 
 
 bootloader_extended:
@@ -154,23 +175,3 @@ long_mode_note:
 
 times 512-($-bootloader_long) db 0x00
 
-
-FATS:
-; #FATS * SPF * BPS
-times (18 * 512)-($-FATS) db 0x00
-
-
-ROOT_DIRECTORY:
-; (#RDE * 32 - 1) / BPS
-
-HOME_DIRECTORY:
-NAME: db 'HOME'
-times 11-($-NAME) db 0x00
-FLAGS: db 0x10
-times 8 db 0x00
-FC_HIGH: db 0x3D
-times 4 db 0x00
-FC_LOW: db 0x00
-BYTES: db 0x00000000
-
-times (15 * 512)-($-ROOT_DIRECTORY) db 0x00

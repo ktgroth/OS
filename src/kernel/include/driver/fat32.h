@@ -54,29 +54,11 @@ typedef struct __attribute__((packed)) {
 #define ARCHIVE     0x20
 #define LFN         READ_ONLY | HIDDEN | SYSTEM | VOLUME_ID
 
-typedef struct __attribute__((packed)) {
-    char name[11];
-    uint8_t flags;
-    uint8_t reserved;
-    uint16_t ctime;
-    uint16_t cdate;
-    uint16_t ladate;
-    uint16_t first_cluster_high;
-    uint16_t lmtime;
-    uint16_t lmdate;
-    uint16_t first_cluster_low;
-    uint32_t bytes;
-} directory_t;
-
 
 void init_bpb();
 void init_fats_root();
 
-void getcwd(char *str);
 void *rnsectors(uint64_t lba, uint64_t n);
 void wnsectors(uint64_t lba, void *buffer, uint64_t n);
-
-directory_t *read_directory(char *path);
-
 
 #endif

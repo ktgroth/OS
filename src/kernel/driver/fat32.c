@@ -1,6 +1,7 @@
 
 #include "../include/cpu/ports.h"
 #include "../include/driver/fat32.h"
+#include "../include/driver/storage.h"
 #include "../include/libc/string.h"
 #include "../include/libc/memory.h"
 
@@ -31,8 +32,8 @@
 extern bpb_t BPB;
 static bpb_t *bpb;
 static fs_info_t *fss;
-static directory_t *root;
-static directory_t *cwd;
+extern directory_t *root = (void *)0x0;
+extern directory_t *cwd = (void *)0x0;
 
 void init_bpb() {
     bpb = &BPB;
@@ -46,15 +47,11 @@ void init_fats_root() {
     root->flags = DIRECTORY;
 
     uint64_t addr = ((uint64_t)root - 14 * 0x200); 
-    root->first_cluster_high = (addr >> 16) & 0xFF;
-    root->first_cluster_low = addr & 0xFF;
+    root->fc_hi = (addr >> 16) & 0xFF;
+    root->fc_lo = addr & 0xFF;
     root->bytes = 14 * 0x200;
 
     cwd = root;
-}
-
-void getcwd(char *str) {
-    strncpy(str, cwd->name, 11);
 }
 
 static inline void wait_bsy() {
@@ -144,6 +141,3 @@ void wnsectors(uint64_t lba, void *sectors, uint64_t n) {
         w_sectors(lba, buffer, n);
 }
 
-directory_t *read_directory(char *path) {
-
-}
