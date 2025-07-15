@@ -32,23 +32,21 @@ void init_timer(uint32_t freq) {
 }
 
 uint64_t read_pit_count() {
-    uint64_t count = 0;
-
     __asm__ __volatile__("cli");
 
     outb(COMMAND, 0b00000000);
 
-    count = inb(CHANNEL_0);
-    count |= inb(CHANNEL_0) << 8;
+    tick = inb(CHANNEL_0);
+    tick |= inb(CHANNEL_0) << 8;
 
-    return count;
+    return tick;
 }
 
 void set_pit_count() {
     __asm__ __volatile__("cli");
 
-    outb(CHANNEL_0, count & 0xFF);
-    outb(CHANNEL_0, (count & 0xFF00) >> 8)
+    outb(CHANNEL_0, tick & 0xFF);
+    outb(CHANNEL_0, (tick & 0xFF00) >> 8);
 }
 
 void sleep(uint64_t millis) {

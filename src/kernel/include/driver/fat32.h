@@ -8,7 +8,7 @@ typedef struct __attribute__((packed)) {
     uint8_t jc[3];
     char oem_identifier[8];
     uint16_t bytes_per_sector;
-    uint8_t secters_per_cluster;
+    uint8_t sectors_per_cluster;
     uint16_t reserved_sectors;
     uint8_t fat_allocation_tables;
     uint16_t root_directory_entry;

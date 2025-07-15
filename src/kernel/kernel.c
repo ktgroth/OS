@@ -61,6 +61,8 @@ void user_input(char *input) {
         char *cwd = getcwd();
         putstr(cwd, COLOR_WHT, COLOR_BLK);
         putstr("\n> ", COLOR_WHT, COLOR_BLK);
+    } else if (!strncmp(input, "LS", strlen("LS"))) {
+        
     } else {
         putstr("You said: ", COLOR_WHT, COLOR_BLK);
         putstr(input, COLOR_WHT, COLOR_BLK);
