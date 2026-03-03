@@ -11,10 +11,11 @@ LD="ld.lld"
 ABFLAGS="-f bin"
 AOFLAGS="-f elf64"
 CFLAGS="-g -ffreestanding -target x86_64-elf"
-LFLAGS="-Ttext $kernel_location --defsym=DETECTED_MEMORY=$detected_memory --defsym=PAGE_TABLE=$page_table --defsym=BPB=0x7C00"
+LFLAGS="-Ttext $kernel_location --image-base=$kernel_location --defsym=DETECTED_MEMORY=$detected_memory --defsym=PAGE_TABLE=$page_table --defsym=BPB=0x7C00"
 
 SRC=src
 BOOT=$SRC/bootloader
+PROGRAMS=$SRC/programs
 KERNEL=$SRC/kernel
 OBJ=obj
 BIN=bin
@@ -52,9 +53,25 @@ function all {
     kernel_size=$(wc -c <$BIN/kernel.bin)
     kernel_sectors=$((($kernel_size + 511) / 512))
 
-    $AS $ABFLAGS $BOOT/boot.s -D PAGE_TABLE=$page_table -D KERNEL_LOCATION=$kernel_location -D KERNEL_SIZE=$kernel_sectors -D DETECTED_MEMORY=$detected_memory -o $BIN/boot.bin
+    $AS $ABFLAGS $PROGRAMS/hello.s -o $BIN/hello.bin
+    $AS $ABFLAGS $BOOT/boot.s \
+        -D PAGE_TABLE=$page_table \
+        -D KERNEL_LOCATION=$kernel_location \
+        -D KERNEL_SIZE=$kernel_sectors \
+        -D DETECTED_MEMORY=$detected_memory \
+        -D BOOT_SECTORS=0 \
+        -o $BIN/boot.bin
     bootloader_size=$(wc -c <$BIN/boot.bin)
     bootloader_sectors=$((($bootloader_size + 511) / 512))
+
+    $AS $ABFLAGS $BOOT/boot.s \
+        -D PAGE_TABLE=$page_table \
+        -D KERNEL_LOCATION=$kernel_location \
+        -D KERNEL_SIZE=$kernel_sectors \
+        -D DETECTED_MEMORY=$detected_memory \
+        -D BOOT_SECTORS=$bootloader_sectors \
+        -o $BIN/boot.bin
+
 
     dd if=/dev/zero of=$OUTPUT bs=1M count=64
     dd if=$BIN/boot.bin of=$OUTPUT conv=notrunc
@@ -63,12 +80,12 @@ function all {
 
 function run {
     all
-    bochs -f debug_bochs
+    qemu-system-x86_64 -hda $OUTPUT -monitor stdio -no-reboot -d in_asm,cpu_reset -D qemu.log -m 4G
 }
 
 function debug {
     all
-    qemu-system-x86_64 -hda $OUTPUT -monitor stdio -no-reboot -d in_asm,cpu_reset -D qemu.log -m 2G
+    qemu-system-x86_64 -hda $OUTPUT -monitor stdio -no-reboot -d in_asm,cpu_reset -D qemu.log -m 4G
     #qemu-system-x86_64 -hda $OUTPUT -S -gdb tcp::1234 -no-reboot -d in_asm,cpu_reset -D qemu.log &
     #gdb -x debug_setup
 }

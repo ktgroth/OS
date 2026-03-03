@@ -80,6 +80,7 @@ void isr_install(void) {
     set_idt_gate(29, (uint64_t)isr29);
     set_idt_gate(30, (uint64_t)isr30);
     set_idt_gate(31, (uint64_t)isr31);
+    set_idt_gate_with_flags(128, (uint64_t)isr128, 0x8E);
 
     outb(0x20, 0x11);
     outb(0xA0, 0x11);
@@ -119,30 +120,33 @@ void irq_install() {
     init_keyboard();
 }
 
-void isr_handler(registers_t r) {
-    putstr("Received Interrupt: ", COLOR_WHT, COLOR_RED);
-    char s[3];
-    int_to_ascii(r.irq_number, s);
-    putstr(s, COLOR_WHT, COLOR_RED);
-    putstr("\n", COLOR_WHT, COLOR_RED);
-    putstr(exception_messages[r.irq_number], COLOR_WHT, COLOR_RED);
-    putstr("\n", COLOR_WHT, COLOR_RED);
+void isr_handler(registers_t *r) {
+    if (interrupt_handlers[r->irq_number]) {
+        interrupt_handlers[r->irq_number](r);
+        return;
+    }
 
-    for (;;)
-        __asm__ __volatile__("hlt");
+    if (r->irq_number < 32) {
+        putstr("Exception: ", COLOR_WHT, COLOR_RED);
+        putstr(exception_messages[r->irq_number], COLOR_WHT, COLOR_RED);
+        putstr("\n", COLOR_WHT, COLOR_RED);
+
+        for (;;)
+            __asm__ __volatile__("hlt");
+    }
 }
 
 void register_interrupt_handler(uint8_t n, isr_t handler) {
     interrupt_handlers[n] = handler;
 }
 
-void irq_handler(registers_t r) {
-    if (r.irq_number >= 40)
+void irq_handler(registers_t *r) {
+    if (r->irq_number >= 40)
         outb(0xA0, 0x20);
 
     outb(0x20, 0x20);
-    if (interrupt_handlers[r.irq_number] != 0) {
-        isr_t handler = interrupt_handlers[r.irq_number];
+    if (interrupt_handlers[r->irq_number] != 0) {
+        isr_t handler = interrupt_handlers[r->irq_number];
         handler(r);
     }
 }

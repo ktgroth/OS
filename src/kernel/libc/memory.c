@@ -230,7 +230,12 @@ void unmap_page(void *vaddr) {
         .xd     =0
     };
 
-    __asm__ __volatile__("invlpg (%0)" ::"r"(vaddr) : "memory");
+    __asm__ __volatile__(
+        "invlpg (%0)"
+        :
+        : "r"(vaddr)
+        : "memory"
+    );
 }
 
 void init_kalloc(uint64_t heap_base, uint64_t heap_pages) {
@@ -248,11 +253,14 @@ static inline uint64_t align_up(uint64_t addr, uint64_t align) {
     return (addr + align - 1) & ~(align - 1);
 }
 
-void *kmalloc(uint64_t n) {
+mblock_t kmalloc(uint64_t n) {
     if (n == 0)
-        return NULL;
+        return (mblock_t){
+            .size   =0,
+            .addr   =NULL,
+        };
 
-    n = align_up(n, KMALLOC_ALIGN);
+    n = align_up(n + sizeof(uint64_t), KMALLOC_ALIGN);
     uint64_t addr = align_up(heap_current, KMALLOC_ALIGN);
 
     if (addr + n > heap_end) {
@@ -265,26 +273,37 @@ void *kmalloc(uint64_t n) {
     }
 
     heap_current = addr + n;
-    return (void *)addr;
+    *((uint64_t *)addr) = n;
+
+    return (mblock_t){
+        .size   =addr,
+        .addr   =(void *)addr + sizeof(uint64_t)
+    };
 }
 
-void *kcalloc(uint64_t n, uint64_t size) {
-    void *addr = kmalloc(n * size);
-    memset(addr, 0, n * size);
-    return addr;
+mblock_t kcalloc(uint64_t n, uint64_t size) {
+    mblock_t block = kmalloc(n*size);
+    if (n*size)
+        memset(block.addr, 0, block.size - sizeof(uint64_t));
+    return block;
 }
 
-void *krealloc(void *src, uint64_t n) {
-    if (!src)
+mblock_t krealloc(mblock_t src, uint64_t n) {
+    if (src.addr == 0 || src.size == 0)
         return kmalloc(n);
 
-    void *addr = kmalloc(n);
-    memcpy(addr, src, n);
+    n = align_up(n + sizeof(uint64_t), KMALLOC_ALIGN);
+    mblock_t block = kmalloc(n);
+
+    memcpy(block.addr, src.addr, MIN(n, src.size - sizeof(uint64_t)));
     kfree(src);
-    return addr;
+    
+    src.addr = block.addr;
+    src.size = block.size;
+    return src;
 }
 
-void kfree(void *src) {
-    free_physical_page(get_paddr(src));
+void kfree(mblock_t src) {
+    free_physical_page(get_paddr(src.addr));
 }
 

@@ -13,6 +13,16 @@ void outb(uint16_t port, uint8_t data) {
     __asm__ volatile ("out %%al, %%dx" : : "a" (data), "d" (port));
 }
 
+uint16_t inw(uint16_t port) {
+    uint16_t result;
+    __asm__ volatile ("inw %1, %0" : "=a"(result) : "Nd"(port));
+    return result;
+}
+
+void outw(uint16_t port, uint16_t data) {
+    __asm__ volatile ("outw %0, %1" : : "a"(data), "Nd"(port));
+}
+
 void io_wait(void) {
     volatile uint8_t *io_flag = (volatile uint8_t *)IO_FLAG_ADDR;
 
@@ -21,3 +31,4 @@ void io_wait(void) {
 
     *io_flag = 0;
 }
+

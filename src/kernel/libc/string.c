@@ -1,8 +1,11 @@
 
+#include "../include/libc/stdlib.h"
 #include "../include/libc/string.h"
+#include "../include/libc/memory.h"
 
-void int_to_ascii(uint64_t n, char str[]) {
-    uint64_t i, sign;
+void int_to_ascii(int64_t n, char str[]) {
+    uint64_t i;
+    int64_t sign;
 
     if ((sign = n) < 0)
         n = -n;
@@ -22,8 +25,15 @@ void int_to_ascii(uint64_t n, char str[]) {
 uint64_t ascii_to_int(char str[]) {
     uint64_t n = 0;
     uint64_t power = 1;
-    for (uint64_t i = strlen(str); i > 0; --i, power *= 10)
-        n += (str[i - 1] - '0') * power;
+
+    for (uint64_t i = strlen(str); i; --i) {
+        uint64_t j = i - 1;
+        if (str[j] < '0' || str[j] > '9')
+            return 0;
+
+        n += (str[j] - '0') * power;
+        power *= 10;
+    }
 
     return n;
 }
@@ -39,7 +49,7 @@ void hex_to_ascii(uint64_t n, char str[]) {
         tmp = (n >> i) & 0x0F;
         if (tmp == 0 && zeros == 0)
             continue;
-    
+
         zeros = 1;
         if (tmp >= 0x0A)
             append(str, tmp - 0x0A + 'A');
@@ -64,6 +74,9 @@ void reverse(char s[]) {
 }
 
 uint64_t strlen(char s[]) {
+    if (!s)
+        return 0;
+
     uint64_t i = 0;
     for (; s[i]; ++i);
     return i;
@@ -102,17 +115,24 @@ uint64_t strncmp(char s1[], char s2[], uint64_t n) {
         return *s1 - *s2;
 }
 
-void *strcpy(char s1[], char s2[]) {
+char *strcpy(char s1[], char s2[]) {
     uint64_t i;
     for (i = 0; s2[i]; ++i)
         s1[i] = s2[i];
+    s1[i] = '\0';
+
     return s1;
 }
 
-void *strncpy(char s1[], char s2[], uint64_t n) {
+char *strncpy(char s1[], char s2[], uint64_t n) {
+    if (!n)
+        return s1;
+
     uint64_t i;
     for (i = 0; s2[i] && i < n; ++i)
         s1[i] = s2[i];
+    s1[MIN(i, n - 1)] = '\0';
+
     return s1;
 }
 

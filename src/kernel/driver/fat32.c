@@ -2,9 +2,11 @@
 #include "../include/cpu/ports.h"
 #include "../include/driver/fat32.h"
 #include "../include/driver/storage.h"
+#include "../include/driver/vga.h"
 #include "../include/libc/string.h"
 #include "../include/libc/memory.h"
 #include "../include/libc/stdlib.h"
+
 
 #define ATAIO_DATA              0x01F0
 #define ATAIO_ERROR             0x01F1
@@ -32,17 +34,16 @@
 
 extern bpb_t BPB;
 static bpb_t *bpb;
-static fs_info_t *fss;
-static char *fat1;
-static char *fat2;
-extern directory_t *root = (void *)0x0;
-extern directory_t *cwd = (void *)0x0;
 
-static uint16_t bps = 0;
-static uint8_t spc = 0;
-static uint32_t spf = 0;
-static uint32_t fat_start_sector = 0;
-static uint32_t data_start_sector = 0;
+static uint32_t fat1;
+static uint32_t fat2;
+static uint32_t fss;
+static uint16_t bps;
+static uint8_t spc;
+static uint32_t spf;
+static uint32_t fat_start_lba;
+static uint32_t data_start_lba;
+static uint32_t root_cluster;
 
 
 void init_bpb() {
@@ -52,26 +53,17 @@ void init_bpb() {
     spc = bpb->sectors_per_cluster;
     spf = bpb->sectors_per_fat32;
 
-    fat_start_sector = bpb->reserved_sectors;
-    data_start_sector = bpb->reserved_sectors + (bpb->fat_allocation_tables * spf);
+    fat_start_lba = bpb->reserved_sectors;
+    data_start_lba = bpb->reserved_sectors + (bpb->fat_allocation_tables * spf);
+    root_cluster = bpb->root_director_cluster;
 
-    fss = (fs_info_t*)(0x7C00UL + bpb->fs_info_sector * bps);
-    fat1 = (char *)(bpb->reserved_sectors * bps);
-    fat2 = (char *)fat1 + (spf * bps);
+    fat1 = bpb->reserved_sectors;
+    fat2 = fat1 + spf;
+    fss = bpb->fs_info_sector;
 }
 
-void init_fats_root() {
-    root = (directory_t *)((char *)fss + (14 * spf * 2) * bps);
-
-    root->name[0] = '/';
-    root->flags = DIRECTORY;
-
-    uint64_t addr = ((uint64_t)root - 14 * bps); 
-    root->fc_hi = (addr >> 16) & 0xFF;
-    root->fc_lo = addr & 0xFF;
-    root->bytes = 14 * bps;
-
-    cwd = root;
+static inline uint32_t cluster_to_lba(uint32_t cluster) {
+    return data_start_lba + (cluster - 2U) * spc;
 }
 
 static inline void wait_bsy() {
@@ -130,9 +122,9 @@ void w_sectors(uint64_t lba, uint16_t *buffer, uint8_t n) {
     }
 }
 
-void *rnsectors(uint64_t lba, uint64_t n) {
-    void *sectors = kmalloc(n * bps);
-    uint16_t *buffer = (uint16_t *)sectors;
+mblock_t rnsectors(uint64_t lba, uint64_t n) {
+    mblock_t sectors = kmalloc(n * bps);
+    uint16_t *buffer = (uint16_t *)sectors.addr;
 
     while (n >= 0xFF) {
         r_sectors(lba, buffer, 0xFF);
@@ -147,8 +139,8 @@ void *rnsectors(uint64_t lba, uint64_t n) {
     return sectors;
 }
 
-void wnsectors(uint64_t lba, void *sectors, uint64_t n) {
-    uint16_t *buffer = (uint16_t *)sectors;
+void wnsectors(uint64_t lba, mblock_t sectors, uint64_t n) {
+    uint16_t *buffer = (uint16_t *)sectors.addr;
 
     while (n >= 0xFF) {
         w_sectors(lba, buffer, 0xFF);
@@ -161,24 +153,10 @@ void wnsectors(uint64_t lba, void *sectors, uint64_t n) {
         w_sectors(lba, buffer, n);
 }
 
-uint32_t cluster_to_lba(uint32_t cluster) {
-    return data_start_sector + (cluster - 2) * spc;
-}
-
-uint32_t get_next_cluster(uint32_t current_cluster) {
-    uint32_t fat_offset = current_cluster * 4;
-    uint32_t fat_sector = (uint64_t)fat1 + (fat_offset / bps);
-    uint32_t ent_offset = fat_offset % bps;
-
-    uint8_t sector[512];
-    r_sectors(fat_sector, sector, 1);
-    return *(uint32_t *)&sector[ent_offset] & 0x0FFFFFFF;
-}
-
 uint32_t find_free_cluster() {
     uint32_t fat_entries = spf * bps / 4;
     for (uint32_t i = 2; i < fat_entries; ++i) {
-        uint32_t fat_sector = fat_start_sector + (i * 4) / bps;
+        uint32_t fat_sector = fat_start_lba + (i * 4) / bps;
         uint32_t ent_offset = (i * 4) % bps;
 
         uint8_t sector[512];
@@ -195,6 +173,16 @@ uint32_t find_free_cluster() {
     return 0xFFFFFFFF;
 }
 
+uint32_t get_next_cluster(uint32_t current_cluster) {
+    uint32_t fat_offset = current_cluster * 4U;
+    uint32_t fat_sector = fat_start_lba + (fat_offset / bps);
+    uint32_t ent_offset = fat_offset % bps;
+
+    uint8_t sector[512];
+    r_sectors(fat_sector, sector, 1);
+    return (*(uint32_t *)(sector + ent_offset)) & 0x0FFFFFFF;
+}
+
 void append_cluster(uint32_t last_cluster, uint32_t new_cluster) {
     uint32_t fat_offset = last_cluster * 4;
     uint32_t fat_sector = (uint32_t)fat1 + (fat_offset / bps);
@@ -206,7 +194,7 @@ void append_cluster(uint32_t last_cluster, uint32_t new_cluster) {
     w_sectors(fat_sector, sector, 1);
 
     fat_offset = new_cluster * 4;
-    fat_sector = fat_start_sector + (fat_offset / bps);
+    fat_sector = fat_start_lba + (fat_offset / bps);
     ent_offset = fat_offset % bps;
 
     r_sectors(fat_sector, sector, 1);
@@ -235,7 +223,7 @@ void create_file(char *filename, uint16_t *buffer, uint32_t size) {
 }
 
 void insert_directory_entry(char *filename, uint32_t first_cluster, uint32_t size) {
-    uint32_t cluster = data_start_sector;
+    uint32_t cluster = data_start_lba;
     uint8_t sector[512];
 
     while (cluster < 0x0FFFFFF8) {
@@ -275,5 +263,48 @@ void read_file(uint32_t start_cluster, uint8_t *buffer, uint32_t size) {
         }
         cluster = get_next_cluster(cluster);
     }
+}
+
+int find_root_entry(const char name[11], directory_t *out) {
+    uint32_t c = root_cluster;
+    uint8_t sec[512];
+
+    while (c < 0x0FFFFFF8U) {
+        for (uint32_t i = 0; i < spc; ++i) {
+            r_sectors(cluster_to_lba(c) + i, (uint16_t *)sec, 1);
+            for (uint32_t off = 0; off < bps; off += 32) {
+                directory_t *e = (directory_t *)(sec + off);
+                if ((uint8_t)e->name[0] == 0x00) return 0;
+                if ((uint8_t)e->name[0] == 0xE5) continue;
+                if ((e->flags & 0x0F) == 0x0F) continue;
+                if (!strncmp(e->name, (char *)name, 11)) {
+                    *out = *e;
+                    return 1;
+                }
+            }
+        }
+
+        c = get_next_cluster(c);
+    }
+
+    return 0;
+}
+
+int read_file_chain(uint32_t start_cluster, uint8_t *dst, uint32_t size) {
+    uint32_t c = start_cluster, done = 0;
+    while (c < 0x0FFFFFF8U && done < size) {
+        uint32_t lba = cluster_to_lba(c);
+        for (uint32_t i = 0; i < spc && done < size; ++i) {
+            uint8_t sec[512];
+            r_sectors(lba + i, (uint16_t *)sec, 1);
+            uint32_t n = (size - done > bps) ? bps : (size - done);
+            memcpy(sec, dst + done, n);
+            done += n;
+        }
+
+        c = get_next_cluster(c);
+    }
+
+    return done == size;
 }
 

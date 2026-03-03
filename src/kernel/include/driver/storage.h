@@ -2,9 +2,7 @@
 #ifndef DRIVER_STORAGE
 #define DRIVER_STORAGE
 
-#include "fat32.h"
 #include "../libc/types.h"
-#include "clock.h"
 
 typedef struct {
     char        name[11];
@@ -72,7 +70,10 @@ typedef struct {
 } file_name_t;
 
 
-char *getcwd();
+_Static_assert(sizeof(directory_t) == 32, "directory_t size must be 32");
+_Static_assert(__builtin_offsetof(directory_t, fc_hi) == 20, "fc_hi offset bad");
+_Static_assert(__builtin_offsetof(directory_t, fc_lo) == 26, "fc_lo offset bad");
+_Static_assert(__builtin_offsetof(directory_t, bytes) == 28, "bytes offset bad");
 
 
 void wdirecotry(char *name);

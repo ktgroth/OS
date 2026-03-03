@@ -1,6 +1,8 @@
 
 #include "../include/cpu/ports.h"
 #include "../include/driver/clock.h"
+#include "../include/driver/vga.h"
+#include "../include/libc/string.h"
 
 #define NMI_DISABLE     0x800
 #define CMOS_OUT        0x70
@@ -59,5 +61,55 @@ uint8_t get_year() {
 
 uint8_t get_century() {
     return get_RTC_register(CENTURY);
+}
+
+char *days_str[] = { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+char *months_str[] = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "", "", "", "", "", "" "October", "November", "December" };
+void print_current_time() {
+    uint8_t hour = get_hour();
+    uint8_t min = get_minute();
+    uint8_t sec = get_second();
+    char *weekday = days_str[get_weekday() - 1];
+    uint8_t day = get_day();
+    char *month = months_str[get_month() - 1];
+    uint16_t year = 0x2000 + get_year();
+
+    char str[32] = "";
+    hex_to_ascii(hour, str);
+    putstr(str + 2, COLOR_WHT, COLOR_BLK);
+    str[0] = '\0';
+    
+    putchar(':', COLOR_WHT, COLOR_BLK);
+    hex_to_ascii(min, str);
+    if (strlen(str) <= 3)
+        putchar('0', COLOR_WHT, COLOR_BLK);
+
+    putstr(str + 2, COLOR_WHT, COLOR_BLK);
+    str[0] = '\0';
+
+    putchar(':', COLOR_WHT, COLOR_BLK);
+    hex_to_ascii(sec, str);
+    if (strlen(str) <= 3)
+        putchar('0', COLOR_WHT, COLOR_BLK);
+
+    putstr(str + 2, COLOR_WHT, COLOR_BLK);
+    str[0] = '\0';
+
+    putstr(" UTC\n", COLOR_WHT, COLOR_BLK);
+
+    putstr(weekday, COLOR_WHT, COLOR_BLK);
+    putstr(", ", COLOR_WHT, COLOR_BLK);
+    
+    putstr(month, COLOR_WHT, COLOR_BLK);
+    putchar(' ', COLOR_WHT, COLOR_BLK);
+
+    hex_to_ascii(day, str);
+    putstr(str + 2, COLOR_WHT, COLOR_BLK);
+    str[0] = '\0';
+
+    putstr(", ", COLOR_WHT, COLOR_BLK);
+    hex_to_ascii(year, str);
+    putstr(str + 2, COLOR_WHT, COLOR_BLK);
+    putchar('\n', COLOR_WHT, COLOR_BLK);
 }
 

@@ -2,6 +2,8 @@
 #ifndef __DRIVER_FAT32
 #define __DRIVER_FAT32
 
+#include "storage.h"
+#include "../libc/memory.h"
 #include "../libc/types.h"
 
 typedef struct __attribute__((packed)) {
@@ -56,9 +58,11 @@ typedef struct __attribute__((packed)) {
 
 
 void init_bpb();
-void init_fats_root();
 
-void *rnsectors(uint64_t lba, uint64_t n);
-void wnsectors(uint64_t lba, void *buffer, uint64_t n);
+mblock_t rnsectors(uint64_t lba, uint64_t n);
+void wnsectors(uint64_t lba, mblock_t buffer, uint64_t n);
+
+int find_root_entry(const char name[11], directory_t *out);
+int read_file_chain(uint32_t start_cluster, uint8_t *dst, uint32_t size);
 
 #endif

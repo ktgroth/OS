@@ -13,5 +13,7 @@ uint8_t get_month();
 uint8_t get_year();
 uint8_t get_century();
 
+void print_current_time();
+
 #endif
 

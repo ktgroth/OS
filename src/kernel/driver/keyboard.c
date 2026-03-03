@@ -31,9 +31,9 @@ const char sc_ascii[] = {
     'X', 'C', 'V', 'B', 'N', 'M', ',', '.', '/', '?', '?', '?', ' '
 };
 
-static void keyboard_callback(registers_t regs) {
+static void keyboard_callback(registers_t *regs) {
     uint8_t scancode = inb(0x60);
-    
+
     if (scancode > SC_MAX)
         return;
     if (scancode == BACKSPACE) {

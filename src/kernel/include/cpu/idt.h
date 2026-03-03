@@ -23,6 +23,7 @@ typedef struct __attribute__((packed)) {
 
 #define IDT_ENTRIES 256
 
+void set_idt_gate_with_flags(int32_t n, uint64_t handler, uint8_t flags);
 void set_idt_gate(int32_t n, uint64_t handler);
 void set_idt(void);
 

@@ -1,0 +1,209 @@
+
+#include "../include/cpu/ports.h"
+#include "../include/driver/vga.h"
+#include "../include/driver/clock.h"
+#include "../include/libc/commands.h"
+#include "../include/libc/memory.h"
+#include "../include/libc/string.h"
+#include "../include/driver/fat32.h"
+#include "../include/driver/storage.h"
+
+#define MAX_INPUT 4096
+#define MAX_ARGS 16
+
+static int tokenize(char *s, char *argv[], int max_args) {
+    int argc = 0;
+
+    while (*s && argc < max_args) {
+        while (*s == ' ') s++;
+        if (!*s) break;
+        argv[argc++] = s;
+        
+        while (*s && *s != ' ') s++;
+        if (*s) *s++ = '\0';
+    }
+
+    return argc;
+}
+
+static void cmd_help(int argc, char **argv);
+static void cmd_clear(int argc, char **argv);
+static void cmd_time(int argc, char **argv);
+static void cmd_pwd(int argc, char **argv);
+static void cmd_cd(int argc, char **argv);
+static void cmd_ls(int argc, char **argv);
+static void cmd_alloc(int argc, char **argv);
+static void cmd_shutdown(int argc, char **argv);
+static void cmd_read(int argc, char **argv);
+static void cmd_write(int argc, char **argv);
+static void cmd_run(int argc, char **argv);
+
+static command_t commands[] = {
+    { "HELP", cmd_help, "List commands" },
+    { "CLEAR", cmd_clear, "Clear the screen" },
+    { "TIME", cmd_time, "Show RTC time" },
+    { "PWD", cmd_pwd, "Print working directory" },
+    { "CD" , cmd_cd, "Change directory" },
+    { "LS", cmd_ls, "List directory" },
+    { "ALLOC", cmd_alloc, "Test allocation" },
+    { "SHUTDOWN", cmd_shutdown, "Power off" },
+    { "READ", cmd_read, "Read file: READ <PATH> "},
+    { "WRITE", cmd_write, "Write file: WRITE <PATH> <DATA>" },
+    { "RUN", cmd_run, "Run file: RUN <PATH> ..ARGS" }
+};
+static const int command_count = sizeof(commands)/sizeof(commands[0]);
+
+
+static void dispatch(int argc, char **argv) {
+    if (argc == 0) return;
+
+    for (uint64_t i = 0; i < command_count; ++i) {
+        if (!strcmp(argv[0], commands[i].name)) {
+            commands[i].fn(argc, argv);
+            return;
+        }
+    }
+
+    putstr("Unknown command. Type HELP\n> ", COLOR_WHT, COLOR_BLK);
+}
+
+void user_input(char *input) {
+    char *argv[MAX_ARGS];
+    int argc = tokenize(input, argv, MAX_ARGS);
+    dispatch(argc, argv);
+}
+
+static void cmd_help(int argc, char **argv) {
+    for (int64_t i = 0; i < command_count; ++i) {
+        putstr(commands[i].name, COLOR_WHT, COLOR_BLK);
+        putstr(": ", COLOR_WHT, COLOR_BLK);
+        putstr(commands[i].help, COLOR_WHT, COLOR_BLK);
+        putchar('\n', COLOR_WHT, COLOR_BLK);
+    }
+
+    putstr("> ", COLOR_WHT, COLOR_BLK);
+}
+
+static void cmd_clear(int argc, char **argv) {
+    set_cursor_pos(0, 0);
+    clearwin(COLOR_WHT, COLOR_BLK);
+    putstr("> ", COLOR_WHT, COLOR_BLK);
+}
+
+static void cmd_time(int argc, char **argv) {
+    print_current_time();
+    putstr("> ", COLOR_WHT, COLOR_BLK);
+}
+
+static void cmd_pwd(int argc, char **argv) {
+    putstr("> ", COLOR_WHT, COLOR_BLK);
+
+}
+
+static void cmd_cd(int argc, char **argv) {
+    putstr("> ", COLOR_WHT, COLOR_BLK);
+}
+
+static void cmd_ls(int argc, char **argv) {
+    putstr("> ", COLOR_WHT, COLOR_BLK);
+
+}
+
+static void cmd_alloc(int argc, char **argv) {
+    mblock_t block = kmalloc(0x1000);
+    uint64_t *virt_addr = block.addr;
+    uint64_t *phys_addr = (uint64_t *)get_paddr(virt_addr);
+    char virt_str[66] = "";
+    hex_to_ascii((uint64_t)virt_addr, virt_str);
+
+    char phys_str[66] = "";
+    hex_to_ascii((uint64_t)phys_addr, phys_str);
+
+    putstr("VAddr: ", COLOR_WHT, COLOR_BLK);
+    putstr(virt_str, COLOR_WHT, COLOR_BLK);
+    putstr(", PAddr: ", COLOR_WHT, COLOR_BLK);
+    putstr(phys_str, COLOR_WHT, COLOR_BLK);
+    putstr("\n> ", COLOR_WHT, COLOR_BLK);
+}
+
+static void cmd_shutdown(int argc, char **argv) {
+    outw(0x604, 0x2000);
+}
+
+static void cmd_read(int argc, char **argv) {
+    putstr("> ", COLOR_WHT, COLOR_BLK);
+
+}
+
+static void cmd_write(int argc, char **argv) {
+    putstr("> ", COLOR_WHT, COLOR_BLK);
+
+}
+
+
+#define APP_LOAD_ADDR ((uint8_t *)0x200000)
+#define MAX_APP_SIZE (1024 * 1024)
+
+static int to_name(const char *in, char out[11]) {
+    uint64_t i = 0, j = 0;
+    for (i = 0; i < 11; ++i)
+        out[i] = ' ';
+
+    i = 0;
+    while (in[i] && in[i] != '.' && j < 8) {
+        char c = in[i++];
+        if (c >= 'a' && c <= 'z') c -= 32;
+        out[j++] = c;
+    }
+
+    if (in[i] == '.') ++i;
+    j = 8;
+    while (in[i] && j < 11) {
+        char c = in[i++];
+        if (c >= 'a' && c <= 'z') c -= 32;
+        out[j++] = c;
+    }
+
+    return 1;
+}
+
+static void cmd_run(int argc, char **argv) {
+    if (argc < 2) {
+        putstr("Usage: RUN <NAME.EXT>\n> ", COLOR_WHT, COLOR_BLK);
+        return;
+    }
+    
+    char name[11];
+    directory_t ent;
+    to_name(argv[1], name);
+
+    if (!find_root_entry(name, &ent)) {
+        putstr("RUN: file not found\n> ", COLOR_WHT, COLOR_BLK);
+        return;
+    }
+
+    if (ent.flags & DIRECTORY) {
+        putstr("RUN: is directory\n> ", COLOR_WHT, COLOR_BLK);
+        return;
+    }
+
+    if (ent.bytes == 0 || ent.bytes > MAX_APP_SIZE) {
+        putstr("RUN: bad file size\n> ", COLOR_WHT, COLOR_BLK);
+        return;
+    }
+
+    uint32_t start_cluster = ((uint32_t)ent.fc_hi << 16) | ent.fc_lo;
+    if (!read_file_chain(start_cluster, APP_LOAD_ADDR, ent.bytes)) {
+        putstr("RUN: read failed\n> ", COLOR_WHT, COLOR_BLK);
+        return;
+    }
+
+    typedef uint64_t (*app_entry_t)(void);
+    uint64_t code = ((app_entry_t)APP_LOAD_ADDR)();
+    char s[32];
+    int_to_ascii(code, s);
+    putstr("Program exited with code ", COLOR_WHT, COLOR_BLK);
+    putstr(s, COLOR_WHT, COLOR_BLK);
+    putstr("\n> ", COLOR_WHT, COLOR_BLK);
+}
+

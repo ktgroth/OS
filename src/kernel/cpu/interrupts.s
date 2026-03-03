@@ -43,13 +43,8 @@ QUADWORD_SIZE equ 0x08
 
 %macro SAVE_REGS_AND_CALL_HANDLER 1
     PUSHALL
-
-    mov rdx, rsp
-    mov rdi, [rsp + REGISTER_SIZE]
-    mov rsi, [rsp + REGISTER_SIZE + QUADWORD_SIZE]
-
+    mov rdi, rsp
     call %1
-
     POPALL
 %endmacro
 
@@ -106,7 +101,7 @@ ISR_NOERRCODE 5     ; Bound Range Exceeded
 ISR_NOERRCODE 6     ; Invalid Opcode
 ISR_NOERRCODE 7     ; Device not Available
 
-ISR_NOERRCODE 8     ; Dobule Fault
+ISR_ERRCODE   8     ; Dobule Fault
 
 ISR_NOERRCODE 9     ; Coprocessor Segment Overrun
 ISR_ERRCODE   10    ; Invalid TSS
@@ -116,11 +111,11 @@ ISR_ERRCODE   13    ; General Protection
 ISR_ERRCODE   14    ; Page Fault
 ISR_NOERRCODE 15    ; Reserved
 ISR_NOERRCODE 16    ; FPU Floating Point Error
-ISR_NOERRCODE 17    ; Alignment Check
+ISR_ERRCODE   17    ; Alignment Check
 ISR_NOERRCODE 18    ; Machine Check
 ISR_NOERRCODE 19    ; SIMD Floating Point Exception
 ISR_NOERRCODE 20    ; Virtualization Exception
-ISR_NOERRCODE 21    ; Control Protection
+ISR_ERRCODE   21    ; Control Protection
 ISR_NOERRCODE 22    ; Unknown
 ISR_NOERRCODE 23    ; Unknown
 ISR_NOERRCODE 24    ; Unknown
@@ -131,6 +126,7 @@ ISR_NOERRCODE 28    ; Unknown
 ISR_NOERRCODE 29    ; Unknown
 ISR_NOERRCODE 30    ; Unknown
 ISR_NOERRCODE 31    ; Unknown
+ISR_NOERRCODE 128   ; Unknown
 
 IRQ_CODE 0, 32
 IRQ_CODE 1, 33

@@ -1,33 +1,34 @@
 [ORG 0x7C00]
 
 
-JUMP_BOOT_RECORD:       db 0xEB, 0x3C, 0x90
+JUMP_BOOT_RECORD:       db 0xEB, 0x58, 0x90
 OEM_IDENTIFIER:         db 'FRDOS5.1'
+
 BYTES_PER_SECTOR:       dw 0x0200
-SECTORS_PER_CLUSTER:    db 0x20
+SECTORS_PER_CLUSTER:    db 0x01
 RESERVED_SECTORS:       dw 0x0003
 FILE_ALLOCATION_TABLES: db 0x02
 ROOT_DIRECTORY_ENTIRES: dw 0x0000
 TOTAL_SECTORS:          dw 0x0000
-MEDIA_DESCRIPTOR_TYPE:  db 0xF0
+MEDIA_DESCRIPTOR_TYPE:  db 0xF8
 SECTORS_PER_FAT:        dw 0x0000
-SECTORS_PER_TRACK:      dw 0x0012
-HEADS:                  dw 0x0002
+SECTORS_PER_TRACK:      dw 0x003F
+HEADS:                  dw 0x00FF
 HIDDEN_SECTORS:         dd 0x00000000
-LARGE_SECTOR_COUNT:     dd 0x00400000
+LARGE_SECTOR_COUNT:     dd 0x00020000
 
 SECTORS_PER_FAT32:      dd 0x00000009
 EXT_FLAGS:              dw 0x0000
 FS_VERSION:             dw 0x0000
-ROOT_CLUSTER:           dd 0x00000000
+ROOT_CLUSTER:           dd 0x00000002
 FSINFO_SECTOR:          dw 0x0001
-BACKUP_BOOT_SECTOR:     dw 0x0000
-RESERVED1:              db 0x00
+BACKUP_BOOT_SECTOR:     dw 0x0006
+RESERVED1:              times 12 db 0x00
 DRIVE_NUMBER:           db 0x80
 RESERVED2:              db 0x00
 BOOT_SIGNATURE:         db 0x29
 VOLUME_ID:              dd 0x12345678
-VOLUME_LABEL:           db 'MY OS FAT32'
+VOLUME_LABEL:           db 'MY OS      '
 FS_TYPE:                db 'FAT32   '
 
 
@@ -86,18 +87,50 @@ times 512-($-RESERVED_SECTOR1) db 0x00
 
 
 FATS:
+FAT1:
+    dd 0x0FFFFFF8
+    dd 0xFFFFFFFF
+    dd 0x0FFFFFFF
+    dd 0x0FFFFFFF
 ; #FATS * SPF * BPS
-times (18 * 512)-($-FATS) db 0x00
+times (9 * 512 - 16) db 0x00
 
+FAT2:
+    dd 0x0FFFFFF8
+    dd 0xFFFFFFFF
+    dd 0x0FFFFFFF
+    dd 0x0FFFFFFF
+; #FATS * SPF * BPS
+times (9 * 512 - 16) db 0x00
 
 ROOT_DIRECTORY:
+ROOT_CLUSTER_DATA:
+    db 'HELLO   BIN'
+    db 0x20
+    db 0x00
+    db 0x00
+    dw 0x0000
+    dw 0x0000
+    dw 0x0000
+    dw 0x0000
+    dw 0x0000
+    dw 0x0000
+    dw 0x0003
+    dd hello_bin_size
+    db 0x00
 ; (#RDE * 32 - 1) / BPS
-times (15 * 512)-($-ROOT_DIRECTORY) db 0x00
+times (512 - ($ - ROOT_DIRECTORY)) db 0x00
 
+HELLO_CLUSTER_DATA:
+hello_bin_start:
+    incbin "bin/hello.bin"
+hello_bin_end:
+hello_bin_size equ hello_bin_end - hello_bin_start
+    times (512 - (hello_bin_size % 512)) % 512 db 0x00
 
 bootloader_extended:
 begin_protected:
-    [bits 32]   
+    [bits 32]
 
     call detect_lm_protected
     call init_page_directory
@@ -128,7 +161,7 @@ begin_long_mode:
     mov rsi, long_mode_note
     call print_long
 
-    mov rax, 0x26
+    mov rax, BOOT_SECTORS
     mov rsi, KERNEL_SIZE
     mov rdi, KERNEL_LOCATION
 
