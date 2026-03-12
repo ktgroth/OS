@@ -2,6 +2,8 @@
 #ifndef LIBC_MEMORY
 #define LIBC_MEMORY
 
+#include "types.h"
+
 typedef struct {
     uint64_t flags      : 12;
     uint64_t addr       : 40;

@@ -11,7 +11,9 @@ LD="ld.lld"
 ABFLAGS="-f bin"
 AOFLAGS="-f elf64"
 CFLAGS="-g -ffreestanding -target x86_64-elf"
+PCFLAGS="-target x86_64-elf -Wl,-u,-header -ffreestanding -fPIE -fno-stack-protector -mno-red-zone -nostdlib -nostartfiles -nodefaultlibs"
 LFLAGS="-Ttext $kernel_location --image-base=$kernel_location --defsym=DETECTED_MEMORY=$detected_memory --defsym=PAGE_TABLE=$page_table --defsym=BPB=0x7C00"
+PLFLAGS="-nostdlib --section-start=.hdr=0x10000 -pie -Ttext 0x10020 --image-base=0x10000 -e _start --oformat=binary"
 
 SRC=src
 BOOT=$SRC/bootloader
@@ -21,13 +23,25 @@ OBJ=obj
 BIN=bin
 BUILD=build
 
-SRCS=($(find "$KERNEL" -name "*.c" -o -path "$SRC" -name "*.c"))
+SRCSK=($(find "$KERNEL" -name "*.c"))
 OBJSK=()
 
-for src in "${SRCS[@]}"; do
+SRCSP=($(find "$PROGRAMS" -name "*.c"))
+OBJSP=()
+BINSP=()
+
+for src in "${SRCSK[@]}"; do
     obj="${OBJ}/kernel/$(basename "$src" .c).o"
     OBJSK+=("$obj")
 done
+
+for src in "${SRCSP[@]}"; do
+    obj="${OBJ}/programs/$(basename "$src" .c).o"
+    bin="${BIN}/$(basename "$src" .c).bin"
+    OBJSP+=("$obj")
+    BINSP+=("$bin")
+done
+
 
 OUTPUT=$BUILD/OS
 
@@ -36,11 +50,12 @@ function all {
 
     mkdir -p $OBJ
     mkdir -p $OBJ/kernel
+    mkdir -p $OBJ/programs
     mkdir -p $BIN
     mkdir -p $BUILD
 
-    for i in "${!SRCS[@]}"; do
-        src="${SRCS[$i]}"
+    for i in "${!SRCSK[@]}"; do
+        src="${SRCSK[$i]}"
         obj="${OBJSK[$i]}"
         echo $src $obj
         build $src $obj
@@ -48,12 +63,21 @@ function all {
 
     $AS $AOFLAGS $KERNEL/entry.s -o $OBJ/kernel/entry.o
     $AS $AOFLAGS $KERNEL/cpu/interrupts.s -o $OBJ/kernel/interrupts.o
-    $LD $LFLAGS $OBJ/kernel/entry.o $OBJ/kernel/interrupts.o "${OBJSK[@]}" -o $BIN/kernel.elf
+    # $LD $LFLAGS $OBJ/kernel/entry.o $OBJ/kernel/interrupts.o "${OBJSK[@]}" -o $BIN/kernel.elf
     $LD $LFLAGS --oformat binary $OBJ/kernel/entry.o $OBJ/kernel/interrupts.o "${OBJSK[@]}" -o $BIN/kernel.bin
     kernel_size=$(wc -c <$BIN/kernel.bin)
     kernel_sectors=$((($kernel_size + 511) / 512))
 
-    $AS $ABFLAGS $PROGRAMS/hello.s -o $BIN/hello.bin
+    for i in "${!SRCSP[@]}"; do
+        src="${SRCSP[$i]}"
+        obj="${OBJSP[$i]}"
+        bin="${BINSP[$i]}"
+        echo $src $obj $bin
+        compile_program $src $obj
+        link_program $obj $bin
+    done
+
+    # $AS $ABFLAGS $PROGRAMS/hello.s -o $BIN/hello.bin
     $AS $ABFLAGS $BOOT/boot.s \
         -D PAGE_TABLE=$page_table \
         -D KERNEL_LOCATION=$kernel_location \
@@ -92,6 +116,15 @@ function debug {
 
 function build {
     $CC $CFLAGS -c $1 -o $2
+}
+
+function compile_program {
+    set +x
+    $CC $PCFLAGS -c $1 -o $2
+}
+
+function link_program {
+    $LD $PLFLAGS $1 -o $2
 }
 
 function clean {

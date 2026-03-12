@@ -67,13 +67,13 @@ void init_memory() {
         hex_to_ascii(length, length_str);
         int_to_ascii(type, type_str);
 
-        putstr("BASE: ", COLOR_WHT, COLOR_BLK);
-        putstr(base_str, COLOR_WHT, COLOR_BLK);
-        putstr(", LENGTH: ", COLOR_WHT, COLOR_BLK);
-        putstr(length_str, COLOR_WHT, COLOR_BLK);
-        putstr(", TYPE: ", COLOR_WHT, COLOR_BLK);
-        putstr(type_str, COLOR_WHT, COLOR_BLK);
-        putstr("\n", COLOR_WHT, COLOR_BLK);
+        // putstr("BASE: ", COLOR_WHT, COLOR_BLK);
+        // putstr(base_str, COLOR_WHT, COLOR_BLK);
+        // putstr(", LENGTH: ", COLOR_WHT, COLOR_BLK);
+        // putstr(length_str, COLOR_WHT, COLOR_BLK);
+        // putstr(", TYPE: ", COLOR_WHT, COLOR_BLK);
+        // putstr(type_str, COLOR_WHT, COLOR_BLK);
+        // putstr("\n", COLOR_WHT, COLOR_BLK);
     }
 }
 

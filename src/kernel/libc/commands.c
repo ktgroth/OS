@@ -2,11 +2,13 @@
 #include "../include/cpu/ports.h"
 #include "../include/driver/vga.h"
 #include "../include/driver/clock.h"
+#include "../include/driver/fat32.h"
+#include "../include/driver/storage.h"
+#include "../include/libc/printf.h"
 #include "../include/libc/commands.h"
 #include "../include/libc/memory.h"
 #include "../include/libc/string.h"
-#include "../include/driver/fat32.h"
-#include "../include/driver/storage.h"
+#include "../include/libc/app.h"
 
 #define MAX_INPUT 4096
 #define MAX_ARGS 16
@@ -87,7 +89,8 @@ static void cmd_help(int argc, char **argv) {
 static void cmd_clear(int argc, char **argv) {
     set_cursor_pos(0, 0);
     clearwin(COLOR_WHT, COLOR_BLK);
-    putstr("> ", COLOR_WHT, COLOR_BLK);
+    printf("Type something, it will go through the kernel\n"
+           "Type SHUTDOWN to Shutdown CPU\n> ");
 }
 
 static void cmd_time(int argc, char **argv) {
@@ -167,6 +170,27 @@ static int to_name(const char *in, char out[11]) {
     return 1;
 }
 
+
+#define APP_LOAD_MIN    ((uint8_t *)0x200000)
+#define APP_ALIGN       0x1000
+#define APP_FILE_MAX    (0x400 * 0x400)
+
+
+static uint8_t *next_app_addr = APP_LOAD_MIN;
+
+static uint8_t *align_up_ptr(uint8_t *p, uint64_t align) {
+    uint64_t v = (uint64_t)p;
+    v = (v + align - 1) & ~(align - 1);
+    return (uint8_t *)v;
+}
+
+static uint8_t *alloc_app_region(uint64_t total_size) {
+    uint8_t *base = align_up_ptr(next_app_addr, APP_ALIGN);
+    uint8_t *end = base + total_size;
+    next_app_addr = end;
+    return base;
+}
+
 static void cmd_run(int argc, char **argv) {
     if (argc < 2) {
         putstr("Usage: RUN <NAME.EXT>\n> ", COLOR_WHT, COLOR_BLK);
@@ -192,18 +216,45 @@ static void cmd_run(int argc, char **argv) {
         return;
     }
 
+    uint8_t *file_base = alloc_app_region(ent.bytes);
+    if (!file_base) {
+        putstr("RUN: out of app memory\n> ", COLOR_WHT, COLOR_BLK);
+        return;
+    }
+
     uint32_t start_cluster = ((uint32_t)ent.fc_hi << 16) | ent.fc_lo;
-    if (!read_file_chain(start_cluster, APP_LOAD_ADDR, ent.bytes)) {
+    if (!read_file_chain(start_cluster, file_base, ent.bytes)) {
         putstr("RUN: read failed\n> ", COLOR_WHT, COLOR_BLK);
         return;
     }
 
+    app_header_t *hdr = (app_header_t *)file_base;
+    // printf("%x\n", hdr->magic);
+    // printf("%x\n", hdr->version);
+    // printf("%x\n", hdr->entry_off);
+    // printf("%x\n", hdr->image_size);
+    // printf("%x\n", hdr->flags);
+
+    if (hdr->magic != APP_MAGIC || hdr->version != APP_VERSION) {
+        putstr("RUN: bad app header\n> ", COLOR_WHT, COLOR_BLK);
+        return;
+    } if (!(hdr->flags & APP_FLAG_PIE)) {
+        putstr("RUN: app not PIE\n> ", COLOR_WHT, COLOR_BLK);
+        return;
+    }
+
+    uint8_t *payload = file_base + sizeof(app_header_t);
+    if (hdr->image_size != (uint64_t)(ent.bytes - sizeof(app_header_t))) {
+        putstr("RUN: size mismatch\n> ", COLOR_WHT, COLOR_BLK);
+        return;
+    } if (hdr->entry_off >= hdr->image_size) {
+        putstr("RUN: bad entry\n> ", COLOR_WHT, COLOR_BLK);
+        return;
+    }
+
     typedef uint64_t (*app_entry_t)(void);
-    uint64_t code = ((app_entry_t)APP_LOAD_ADDR)();
-    char s[32];
-    int_to_ascii(code, s);
-    putstr("Program exited with code ", COLOR_WHT, COLOR_BLK);
-    putstr(s, COLOR_WHT, COLOR_BLK);
-    putstr("\n> ", COLOR_WHT, COLOR_BLK);
+    app_entry_t entry = (app_entry_t)(payload + hdr->entry_off);
+    uint64_t code = entry();
+    printf("%u\n> ", code);
 }
 
