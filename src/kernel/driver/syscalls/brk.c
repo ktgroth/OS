@@ -3,6 +3,6 @@
 #include "../../include/driver/syscalls/brk.h"
 
 uint64_t sys_brk(uint64_t brk) {
-
+    return 0;
 }
 

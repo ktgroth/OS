@@ -2,6 +2,7 @@
 #include "../include/libc/stdlib.h"
 #include "../include/libc/string.h"
 #include "../include/libc/memory.h"
+#include "../include/libc/printf.h"
 #include "../include/driver/vga.h"
 
 #define NULL ((void *)0)
@@ -67,13 +68,13 @@ void init_memory() {
         hex_to_ascii(length, length_str);
         int_to_ascii(type, type_str);
 
-        // putstr("BASE: ", COLOR_WHT, COLOR_BLK);
-        // putstr(base_str, COLOR_WHT, COLOR_BLK);
-        // putstr(", LENGTH: ", COLOR_WHT, COLOR_BLK);
-        // putstr(length_str, COLOR_WHT, COLOR_BLK);
-        // putstr(", TYPE: ", COLOR_WHT, COLOR_BLK);
-        // putstr(type_str, COLOR_WHT, COLOR_BLK);
-        // putstr("\n", COLOR_WHT, COLOR_BLK);
+        putstr("BASE: ", COLOR_WHT, COLOR_BLK);
+        putstr(base_str, COLOR_WHT, COLOR_BLK);
+        putstr(", LENGTH: ", COLOR_WHT, COLOR_BLK);
+        putstr(length_str, COLOR_WHT, COLOR_BLK);
+        putstr(", TYPE: ", COLOR_WHT, COLOR_BLK);
+        putstr(type_str, COLOR_WHT, COLOR_BLK);
+        putstr("\n", COLOR_WHT, COLOR_BLK);
     }
 }
 
@@ -82,7 +83,35 @@ void init_page_table() {
     memset(page_bitmap, 0, BITMAP_SIZE);
 }
 
-pt_t *alloc_physical_page() {
+
+pml4_t *get_active_page_table(void) {
+    return page_table;
+}
+
+void set_active_page_table(pml4_t *root) {
+    page_table = root;
+}
+
+uint64_t read_cr3(void) {
+    uint64_t cr3;
+    __asm__ __volatile__(
+        "mov %%cr3, %0"
+        : "=r"(cr3)
+    );
+    return cr3;
+}
+
+void write_cr3(uint64_t cr3) {
+    __asm__ __volatile__(
+        "mov %0, %%cr3"
+        :
+        : "r"(cr3)
+        : "memory"
+    );
+}
+
+
+void *alloc_physical_page() {
     for (uint64_t i = 0; i < MAX_PHYS_PAGES; ++i) {
         if (!BIT_TEST(page_bitmap, i)) {
             BIT_SET(page_bitmap, i);
@@ -238,6 +267,28 @@ void unmap_page(void *vaddr) {
     );
 }
 
+void *get_paddr_in(pml4_t *root, void *vaddr) {
+    pml4_t *saved = page_table;
+    page_table = root;
+    void *pa = get_paddr(vaddr);
+    page_table = saved;
+    return pa;
+}
+
+void map_page_in(pml4_t *root, void *paddr, void *vaddr, uint8_t flags) {
+    pml4_t *saved = page_table;
+    page_table = root;
+    map_page(paddr, vaddr, flags);
+    page_table = saved;
+}
+
+void unmap_page_in(pml4_t *root, void *vaddr) {
+    pml4_t *saved = page_table;
+    page_table = root;
+    unmap_page(vaddr);
+    page_table = saved;
+}
+
 void init_kalloc(uint64_t heap_base, uint64_t heap_pages) {
     heap_start = heap_base;
     heap_end = heap_base + heap_pages * PAGE_SIZE;
@@ -253,57 +304,70 @@ static inline uint64_t align_up(uint64_t addr, uint64_t align) {
     return (addr + align - 1) & ~(align - 1);
 }
 
-mblock_t kmalloc(uint64_t n) {
-    if (n == 0)
-        return (mblock_t){
-            .size   =0,
-            .addr   =NULL,
-        };
+static inline uint64_t align_down(uint64_t addr, uint64_t align) {
+    return addr & ~(align - 1);
+}
 
-    n = align_up(n + sizeof(uint64_t), KMALLOC_ALIGN);
+mblock_t *kmalloc(uint64_t n) {
+    if (n == 0)
+       return 0; 
+
+    uint64_t size = align_up(n + sizeof(uint64_t), KMALLOC_ALIGN);
     uint64_t addr = align_up(heap_current, KMALLOC_ALIGN);
 
-    if (addr + n > heap_end) {
-        uint64_t extra_pages = ((addr + n - heap_end) + PAGE_SIZE - 1) / PAGE_SIZE;
+    if (addr + size > heap_end) {
+        uint64_t extra_pages = ((addr + size - heap_end) + PAGE_SIZE - 1) / PAGE_SIZE;
         for (uint64_t i = 0; i < extra_pages; ++i) {
             void *page = alloc_physical_page();
+            if (!page)
+                return 0;
+
             map_page(page, (void *)heap_end, PAGE_PRESENT | PAGE_RW);
             heap_end += PAGE_SIZE;
         }
     }
 
-    heap_current = addr + n;
-    *((uint64_t *)addr) = n;
+    mblock_t *block = (mblock_t *)addr;
+    heap_current += size;
+    block->size = n;
 
-    return (mblock_t){
-        .size   =addr,
-        .addr   =(void *)addr + sizeof(uint64_t)
-    };
-}
-
-mblock_t kcalloc(uint64_t n, uint64_t size) {
-    mblock_t block = kmalloc(n*size);
-    if (n*size)
-        memset(block.addr, 0, block.size - sizeof(uint64_t));
     return block;
 }
 
-mblock_t krealloc(mblock_t src, uint64_t n) {
-    if (src.addr == 0 || src.size == 0)
-        return kmalloc(n);
+mblock_t *kcalloc(uint64_t n, uint64_t count) {
+    if (!n || !count)
+        return 0;
 
-    n = align_up(n + sizeof(uint64_t), KMALLOC_ALIGN);
-    mblock_t block = kmalloc(n);
+    uint64_t size =  n * count;
+    mblock_t *block = kmalloc(size);
+    if (!block)
+        return 0;
 
-    memcpy(block.addr, src.addr, MIN(n, src.size - sizeof(uint64_t)));
-    kfree(src);
-    
-    src.addr = block.addr;
-    src.size = block.size;
-    return src;
+    memset(block->addr, 0, block->size);
+    return block;
 }
 
-void kfree(mblock_t src) {
-    free_physical_page(get_paddr(src.addr));
+mblock_t *krealloc(mblock_t *src, uint64_t n) {
+    if (!src)
+        return kmalloc(n);
+    if (!n) {
+        kfree(src);
+        return 0;
+    }
+
+    uint64_t size = align_up(n + sizeof(uint64_t), KMALLOC_ALIGN);
+    mblock_t *block = kmalloc(n);
+    if (!block)
+        return 0;
+
+    uint64_t copy = (src->size < n) ? src->size : n;
+    memcpy(block->addr, src->addr, copy);
+    kfree(src);
+    
+    return block;
+}
+
+void kfree(mblock_t *src) {
+    free_physical_page(get_paddr(src));
 }
 

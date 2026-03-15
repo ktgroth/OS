@@ -18,7 +18,7 @@ typedef struct __attribute__((packed)) {
 
 typedef struct __attribute__((packed)) {
     uint16_t limit;
-    uint32_t base;
+    uint64_t base;
 } idt_register_t;
 
 #define IDT_ENTRIES 256

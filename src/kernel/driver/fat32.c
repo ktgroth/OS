@@ -122,9 +122,9 @@ void w_sectors(uint64_t lba, uint16_t *buffer, uint8_t n) {
     }
 }
 
-mblock_t rnsectors(uint64_t lba, uint64_t n) {
-    mblock_t sectors = kmalloc(n * bps);
-    uint16_t *buffer = (uint16_t *)sectors.addr;
+mblock_t *rnsectors(uint64_t lba, uint64_t n) {
+    mblock_t *sectors = kmalloc(n * bps);
+    uint16_t *buffer = (uint16_t *)(sectors->addr);
 
     while (n >= 0xFF) {
         r_sectors(lba, buffer, 0xFF);
@@ -139,8 +139,8 @@ mblock_t rnsectors(uint64_t lba, uint64_t n) {
     return sectors;
 }
 
-void wnsectors(uint64_t lba, mblock_t sectors, uint64_t n) {
-    uint16_t *buffer = (uint16_t *)sectors.addr;
+void wnsectors(uint64_t lba, mblock_t *sectors, uint64_t n) {
+    uint16_t *buffer = (uint16_t *)sectors->addr;
 
     while (n >= 0xFF) {
         w_sectors(lba, buffer, 0xFF);

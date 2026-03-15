@@ -59,8 +59,8 @@ typedef struct __attribute__((packed)) {
 
 void init_bpb();
 
-mblock_t rnsectors(uint64_t lba, uint64_t n);
-void wnsectors(uint64_t lba, mblock_t buffer, uint64_t n);
+mblock_t *rnsectors(uint64_t lba, uint64_t n);
+void wnsectors(uint64_t lba, mblock_t *buffer, uint64_t n);
 
 int find_root_entry(const char name[11], directory_t *out);
 int read_file_chain(uint32_t start_cluster, uint8_t *dst, uint32_t size);

@@ -104,7 +104,14 @@ function all {
 
 function run {
     all
-    qemu-system-x86_64 -hda $OUTPUT -monitor stdio -no-reboot -d in_asm,cpu_reset -D qemu.log -m 4G
+    qemu-system-x86_64 \
+        -hda $OUTPUT \
+        -display gtk \
+        -monitor stdio \
+        -no-reboot \
+        -d in_asm,cpu_reset \
+        -D qemu.log \
+        -m 16G
 }
 
 function debug {

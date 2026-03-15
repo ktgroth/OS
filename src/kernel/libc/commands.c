@@ -113,8 +113,8 @@ static void cmd_ls(int argc, char **argv) {
 }
 
 static void cmd_alloc(int argc, char **argv) {
-    mblock_t block = kmalloc(0x1000);
-    uint64_t *virt_addr = block.addr;
+    mblock_t *block = kmalloc(0x1000);
+    uint64_t *virt_addr = &block->addr;
     uint64_t *phys_addr = (uint64_t *)get_paddr(virt_addr);
     char virt_str[66] = "";
     hex_to_ascii((uint64_t)virt_addr, virt_str);

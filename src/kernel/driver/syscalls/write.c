@@ -3,7 +3,7 @@
 
 #include "../../include/driver/syscalls/write.h"
 
-int64_t sys_write(uint64_t fd, const char *buf, uint64_t count) {
+uint64_t sys_write(uint64_t fd, const char *buf, uint64_t count) {
     if (!buf)
         return -1;
 
