@@ -51,6 +51,7 @@ static inline __attribute__((noreturn)) void sys_exit(uint64_t code) {
 uint64_t _start(void) {
     static const char msg[] = "HELLO WORLD\n";
     sys_write_str(1, msg, sizeof(msg) - 1);
+    // sys_exit(0);
     return 0;
 }
 

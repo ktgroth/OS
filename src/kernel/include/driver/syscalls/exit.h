@@ -3,7 +3,7 @@
 
 #include "../../cpu/isr.h"
 
-void sys_exit(registers_t *r);
+void sys_exit(uint64_t error_code);
 
 #endif
 

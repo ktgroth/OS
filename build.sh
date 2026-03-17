@@ -77,7 +77,6 @@ function all {
         link_program $obj $bin
     done
 
-    # $AS $ABFLAGS $PROGRAMS/hello.s -o $BIN/hello.bin
     $AS $ABFLAGS $BOOT/boot.s \
         -D PAGE_TABLE=$page_table \
         -D KERNEL_LOCATION=$kernel_location \
@@ -105,8 +104,10 @@ function all {
 function run {
     all
     qemu-system-x86_64 \
+        -enable-kvm \
+        -cpu host,+apic,-x2apic \
+        -smp 8,sockets=1,cores=4,threads=2,maxcpus=8 \
         -hda $OUTPUT \
-        -display gtk \
         -monitor stdio \
         -no-reboot \
         -d in_asm,cpu_reset \
@@ -116,9 +117,16 @@ function run {
 
 function debug {
     all
-    qemu-system-x86_64 -hda $OUTPUT -monitor stdio -no-reboot -d in_asm,cpu_reset -D qemu.log -m 4G
-    #qemu-system-x86_64 -hda $OUTPUT -S -gdb tcp::1234 -no-reboot -d in_asm,cpu_reset -D qemu.log &
-    #gdb -x debug_setup
+    qemu-system-x86_64 \
+        -enable-kvm \
+        -cpu host,+apic,-x2apic \
+        -smp 8,sockets=1,cores=4,threads=2,maxcpus=8 \
+        -hda $OUTPUT \
+        -monitor stdio \
+        -no-reboot \
+        -d in_asm,cpu_reset \
+        -D qemu.log \
+        -m 16G
 }
 
 function build {
@@ -126,7 +134,6 @@ function build {
 }
 
 function compile_program {
-    set +x
     $CC $PCFLAGS -c $1 -o $2
 }
 

@@ -2,6 +2,7 @@
 #define USER_PROCESS
 
 #include "../cpu/isr.h"
+#include "../libc/memory.h"
 #include "../libc/types.h"
 
 
@@ -24,7 +25,28 @@ typedef enum {
     PROC_ZOMBIE
 } proc_state_e;
 
+typedef struct process {
+    uint64_t pid;
+    uint64_t ppid;
+    proc_state_e state;
 
+    registers_t *call_frame;
+    registers_t *sregs;
+
+    pml4_t *image_base;
+    uint64_t image_size;
+
+    uint64_t brk_start;
+    uint64_t brk_end;
+    uint64_t brk_limit;
+} process_t;
+
+
+process_t *create_new_process();
+void destroy_process(process_t *proc);
+
+process_t *current_process(void);
+void set_current_process(process_t *p);
 
 #endif
 

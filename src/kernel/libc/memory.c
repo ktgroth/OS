@@ -29,6 +29,9 @@
 #define PAGE_ACCESSED   0x20
 #define PAGE_FLAGS_MASK 0xFFF
 
+#define LAPIC_PHYS 0xFEE00000ULL
+#define LAPIC_VIRT 0xFEE00000ULL
+
 #define KMALLOC_ALIGN   0x08
 
 typedef struct {
@@ -57,30 +60,32 @@ void init_memory() {
         uint32_t type = buffer[i].type;
         uint32_t ACPI = buffer[i++].ACPI;
  
-        char base_str[66] = "";
-        char length_str[66] = "";
-        char type_str[66] = "";
+        // char base_str[66] = "";
+        // char length_str[66] = "";
+        // char type_str[66] = "";
 
         if (type == 1 && phys_base_addr == 0)
             phys_base_addr = base;
 
-        hex_to_ascii(base, base_str);
-        hex_to_ascii(length, length_str);
-        int_to_ascii(type, type_str);
-
-        putstr("BASE: ", COLOR_WHT, COLOR_BLK);
-        putstr(base_str, COLOR_WHT, COLOR_BLK);
-        putstr(", LENGTH: ", COLOR_WHT, COLOR_BLK);
-        putstr(length_str, COLOR_WHT, COLOR_BLK);
-        putstr(", TYPE: ", COLOR_WHT, COLOR_BLK);
-        putstr(type_str, COLOR_WHT, COLOR_BLK);
-        putstr("\n", COLOR_WHT, COLOR_BLK);
+        // hex_to_ascii(base, base_str);
+        // hex_to_ascii(length, length_str);
+        // int_to_ascii(type, type_str);
+        //
+        // putstr("BASE: ", COLOR_WHT, COLOR_BLK);
+        // putstr(base_str, COLOR_WHT, COLOR_BLK);
+        // putstr(", LENGTH: ", COLOR_WHT, COLOR_BLK);
+        // putstr(length_str, COLOR_WHT, COLOR_BLK);
+        // putstr(", TYPE: ", COLOR_WHT, COLOR_BLK);
+        // putstr(type_str, COLOR_WHT, COLOR_BLK);
+        // putstr("\n", COLOR_WHT, COLOR_BLK);
     }
 }
 
 void init_page_table() {
     page_table = PAGE_TABLE;
     memset(page_bitmap, 0, BITMAP_SIZE);
+
+    map_page((void *)LAPIC_PHYS, (void *)LAPIC_VIRT, PAGE_PRESENT | PAGE_RW | PAGE_PCD | PAGE_PWT);
 }
 
 
@@ -312,11 +317,12 @@ mblock_t *kmalloc(uint64_t n) {
     if (n == 0)
        return 0; 
 
-    uint64_t size = align_up(n + sizeof(uint64_t), KMALLOC_ALIGN);
-    uint64_t addr = align_up(heap_current, KMALLOC_ALIGN);
+    uint64_t size = align_up(n, KMALLOC_ALIGN);
+    uint64_t total = size + sizeof(uint64_t);
+    uint64_t new_block = align_up(heap_current, KMALLOC_ALIGN);
 
-    if (addr + size > heap_end) {
-        uint64_t extra_pages = ((addr + size - heap_end) + PAGE_SIZE - 1) / PAGE_SIZE;
+    if (new_block + total > heap_end) {
+        uint64_t extra_pages = ((new_block + total - heap_end) + PAGE_SIZE - 1) / PAGE_SIZE;
         for (uint64_t i = 0; i < extra_pages; ++i) {
             void *page = alloc_physical_page();
             if (!page)
@@ -327,8 +333,8 @@ mblock_t *kmalloc(uint64_t n) {
         }
     }
 
-    mblock_t *block = (mblock_t *)addr;
-    heap_current += size;
+    mblock_t *block = (mblock_t *)new_block;
+    heap_current += total;
     block->size = n;
 
     return block;
@@ -338,7 +344,7 @@ mblock_t *kcalloc(uint64_t n, uint64_t count) {
     if (!n || !count)
         return 0;
 
-    uint64_t size =  n * count;
+    uint64_t size = align_up(n * count, KMALLOC_ALIGN);
     mblock_t *block = kmalloc(size);
     if (!block)
         return 0;
@@ -361,13 +367,14 @@ mblock_t *krealloc(mblock_t *src, uint64_t n) {
         return 0;
 
     uint64_t copy = (src->size < n) ? src->size : n;
-    memcpy(block->addr, src->addr, copy);
+    memcpy((uint8_t *)block->addr, (uint8_t *)src->addr, copy);
     kfree(src);
     
     return block;
 }
 
 void kfree(mblock_t *src) {
-    free_physical_page(get_paddr(src));
+    for (uint64_t max_freed = 0; max_freed < src->size; max_freed += PAGE_SIZE)
+        free_physical_page(get_paddr((void *)src + max_freed));
 }
 

@@ -38,6 +38,7 @@ static void cmd_alloc(int argc, char **argv);
 static void cmd_shutdown(int argc, char **argv);
 static void cmd_read(int argc, char **argv);
 static void cmd_write(int argc, char **argv);
+static void cmd_print(int argc, char **argv);
 static void cmd_run(int argc, char **argv);
 
 static command_t commands[] = {
@@ -51,6 +52,7 @@ static command_t commands[] = {
     { "SHUTDOWN", cmd_shutdown, "Power off" },
     { "READ", cmd_read, "Read file: READ <PATH> "},
     { "WRITE", cmd_write, "Write file: WRITE <PATH> <DATA>" },
+    { "PRINT", cmd_print, "Print memory: PRINT <HEX_ADDR> <WIDTH_BYTES>" },
     { "RUN", cmd_run, "Run file: RUN <PATH> ..ARGS" }
 };
 static const int command_count = sizeof(commands)/sizeof(commands[0]);
@@ -171,6 +173,71 @@ static int to_name(const char *in, char out[11]) {
 }
 
 
+static int parse_hex_u64(const char *s, uint64_t *out) {
+    if (!s || !*s || !out)
+        return 0;
+
+    uint64_t i = 0;
+    uint64_t v = 0;
+
+    if (s[0] == '0' && (s[1] == 'x' || s[1] == 'X'))
+        i = 2;
+
+    if (!s[i])
+        return 0;
+
+    for (; s[i]; ++i) {
+        char c = s[i];
+        uint8_t d;
+        if (c >= '0' && c <= '9')
+            d = (uint8_t)(c - '0');
+        else if (c >= 'A' && c <= 'F')
+            d = (uint8_t)(c - 'A' + 10);
+        else
+            return 0;
+    
+        v = (v << 4) | d;
+    }
+
+    *out = v;
+    return 1;
+}
+
+static void cmd_print(int argc, char **argv) {
+    if (argc < 3) {
+        putstr("Usage: PRINT <HEX_ADDR> <WIDTH_BYTES>\n> ", COLOR_WHT, COLOR_BLK);
+        return;
+    }
+
+    uint64_t addr = 0;
+    if (!parse_hex_u64(argv[1], &addr)) {
+        putstr("PRINT: invalid hex address\n> ", COLOR_WHT, COLOR_BLK);
+        return;
+    }
+
+    uint64_t width = ascii_to_int(argv[2]);
+    if (width == 0 || width > 256) {
+        putstr("PRINT: width must be 1..256\n> ", COLOR_WHT, COLOR_BLK);
+        return;
+    }
+
+    for (uint64_t i = 0; i < width; ++i) {
+        __volatile__ uint8_t *p = (__volatile__ uint8_t *)(addr + i);
+        if (!get_paddr((void *)p)) {
+            printf("PRINT: unmapped at %p\n> ", (void *)p);
+            return;
+        }
+
+        if ((i % 16) == 0)
+            printf("\n%p: ", (void *)p);
+
+        printf("%02x ", (uint64_t)(*p));
+    }
+
+    putstr("\n\n> ", COLOR_WHT, COLOR_BLK);
+}
+
+
 #define APP_LOAD_MIN    ((uint8_t *)0x200000)
 #define APP_ALIGN       0x1000
 #define APP_FILE_MAX    (0x400 * 0x400)
@@ -244,6 +311,7 @@ static void cmd_run(int argc, char **argv) {
     }
 
     uint8_t *payload = file_base + sizeof(app_header_t);
+    // printf("SIZE: %d\nEXPECTED: %d\n", hdr->image_size, ent.bytes - sizeof(app_header_t));
     if (hdr->image_size != (uint64_t)(ent.bytes - sizeof(app_header_t))) {
         putstr("RUN: size mismatch\n> ", COLOR_WHT, COLOR_BLK);
         return;

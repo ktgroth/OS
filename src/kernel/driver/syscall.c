@@ -26,10 +26,9 @@ enum {
 
 static void syscall_dispatch(registers_t *r) {
     switch (r->rax) {
-        case SYS_WRITE: {
-            r->rax = (uint64_t)sys_write(r->rdi, (const char *)r->rsi, r->rdx);
+        case SYS_WRITE:
+            r->rax = sys_write(r->rdi, (const char *)r->rsi, r->rdx);
             break;
-        }
 
         // case SYS_MMAP: {
         //     r->rax = sys_mmap(r->rdi, r->rsi, r->rdx, r->r10, r->r8, r->r9);
@@ -41,25 +40,21 @@ static void syscall_dispatch(registers_t *r) {
         //     break;
         // }
 
-        case SYS_BRK: {
+        case SYS_BRK:
             r->rax = sys_brk(r->rdi);
             break;
-        }
 
-        case SYS_FORK: {
-            r->rax = sys_fork(r);
+        case SYS_FORK:
+            r->rax = sys_fork();
             break;
-        }
 
-        case SYS_EXECVE: {
+        case SYS_EXECVE:
             r->rax = sys_execve((const char *)r->rdi, (char *const *)r->rsi, (const char *const *)r->rdx);
             break;
-        }
 
-        case SYS_EXIT: {
-            sys_exit(r);
-            return;
-        }
+        case SYS_EXIT:
+            sys_exit(r->rdi);
+            break;
 
         // case SYS_WAIT4: {
         //     r->rax = sys_wait4((int)r->rdi, (int *)r->rsi, (int)r->rdx);
@@ -67,9 +62,11 @@ static void syscall_dispatch(registers_t *r) {
         // }
 
         default:
-            r->rax = (uint64_t)-1;
+            printf("Unknown syscall '%d'\n", r->rax);
             break;
     }
+    
+    return;
 }
 
 void init_syscalls(void) {

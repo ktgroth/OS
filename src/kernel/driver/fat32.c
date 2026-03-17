@@ -223,7 +223,7 @@ void create_file(char *filename, uint16_t *buffer, uint32_t size) {
 }
 
 void insert_directory_entry(char *filename, uint32_t first_cluster, uint32_t size) {
-    uint32_t cluster = data_start_lba;
+    uint32_t cluster = root_cluster;
     uint8_t sector[512];
 
     while (cluster < 0x0FFFFFF8) {
@@ -298,7 +298,7 @@ int read_file_chain(uint32_t start_cluster, uint8_t *dst, uint32_t size) {
             uint8_t sec[512];
             r_sectors(lba + i, (uint16_t *)sec, 1);
             uint32_t n = (size - done > bps) ? bps : (size - done);
-            memcpy(sec, dst + done, n);
+            memcpy(dst + done, sec, n);
             done += n;
         }
 

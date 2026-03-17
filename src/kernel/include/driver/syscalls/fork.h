@@ -3,7 +3,7 @@
 
 #include "../../libc/types.h"
 
-int64_t sys_fork();
+uint64_t sys_fork();
 
 #endif
 

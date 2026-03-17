@@ -1,7 +1,7 @@
 
 #include "../include/libc/stdlib.h"
 
-void memcpy(uint8_t *src, uint8_t *dest, uint64_t n) {
+void memcpy(uint8_t *dest, uint8_t *src, uint64_t n) {
     int i;
     for (i = 0; i < n; ++i)
         *(dest + i) = *(src + i);
