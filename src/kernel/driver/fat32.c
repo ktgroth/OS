@@ -160,12 +160,12 @@ uint32_t find_free_cluster() {
         uint32_t ent_offset = (i * 4) % bps;
 
         uint8_t sector[512];
-        r_sectors(fat_sector, sector, 1);
+        r_sectors(fat_sector, (uint16_t *)sector, 1);
         uint32_t entry = *(uint32_t *)&sector[ent_offset] & 0x0FFFFFFF;
 
         if (entry == 0x00000000) {
             *(uint32_t *)&sector[ent_offset] = 0x0FFFFFF8;
-            w_sectors(fat_sector, sector, 1);
+            w_sectors(fat_sector, (uint16_t *)sector, 1);
             return i;
         }
     }
@@ -179,7 +179,7 @@ uint32_t get_next_cluster(uint32_t current_cluster) {
     uint32_t ent_offset = fat_offset % bps;
 
     uint8_t sector[512];
-    r_sectors(fat_sector, sector, 1);
+    r_sectors(fat_sector, (uint16_t *)sector, 1);
     return (*(uint32_t *)(sector + ent_offset)) & 0x0FFFFFFF;
 }
 
@@ -189,23 +189,23 @@ void append_cluster(uint32_t last_cluster, uint32_t new_cluster) {
     uint32_t ent_offset = fat_offset % bps;
 
     uint8_t sector[512];
-    r_sectors(fat_sector, sector, 1);
+    r_sectors(fat_sector, (uint16_t *)sector, 1);
     *(uint32_t *)&sector[ent_offset] = new_cluster;
-    w_sectors(fat_sector, sector, 1);
+    w_sectors(fat_sector, (uint16_t *)sector, 1);
 
     fat_offset = new_cluster * 4;
     fat_sector = fat_start_lba + (fat_offset / bps);
     ent_offset = fat_offset % bps;
 
-    r_sectors(fat_sector, sector, 1);
+    r_sectors(fat_sector, (uint16_t *)sector, 1);
     *(uint32_t *)&sector[ent_offset] = 0x0FFFFFF8;
-    w_sectors(fat_sector, sector, 1);
+    w_sectors(fat_sector, (uint16_t *)sector, 1);
 }
 
 void write_cluster(uint32_t cluster, uint16_t *buffer, uint32_t bytes) {
     uint32_t lba = cluster_to_lba(cluster);
     for (uint32_t i = 0; i < spc; ++i)
-        w_sectors(lba + i, buffer + (i * bps), 1);
+        w_sectors(lba + i, (uint16_t *)(buffer + (i * bps)), 1);
 }
 
 void create_file(char *filename, uint16_t *buffer, uint32_t size) {
@@ -229,20 +229,20 @@ void insert_directory_entry(char *filename, uint32_t first_cluster, uint32_t siz
     while (cluster < 0x0FFFFFF8) {
         for (uint32_t s = 0; s < spc; ++s) {
             uint32_t lba = cluster_to_lba(cluster) + s;
-            r_sectors(lba, sector, 1);
+            r_sectors(lba, (uint16_t *)sector, 1);
 
             for (uint32_t i = 0; i < bps; i += 32) {
                 if (sector[i] == 0x00 || sector[i] == 0xE5) {
                     directory_t *entry = (directory_t *)&sector[i];
 
-                    memset(entry, 0, sizeof(directory_t));
+                    memset((uint8_t *)entry, 0, sizeof(directory_t));
                     memcpy(entry->name, filename, strlen(filename));
                     entry->flags = 0x20;
                     entry->fc_hi = (first_cluster >> 16) & 0xFFFF;
                     entry->fc_lo = first_cluster & 0xFFFF;
                     entry->bytes = size;
 
-                    w_sectors(lba, sector, 1);
+                    w_sectors(lba, (uint16_t *)sector, 1);
                     return;
                 }
             }
@@ -258,7 +258,7 @@ void read_file(uint32_t start_cluster, uint8_t *buffer, uint32_t size) {
     while (cluster < 0x0FFFFFF8 && read < size) {
         uint32_t lba = cluster_to_lba(cluster);
         for (int i = 0; i < spc; ++i) {
-            r_sectors(lba + i, buffer + read, 1);
+            r_sectors(lba + i, (uint16_t *)buffer + read, 1);
             read += bps;
         }
         cluster = get_next_cluster(cluster);

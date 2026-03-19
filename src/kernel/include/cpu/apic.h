@@ -18,6 +18,11 @@ typedef struct {
     apic_cpu_t cpus[APIC_MAX_CPUS];
 } apic_info_t;
 
+void apic_enable_lapic(void);
+void apic_eoi(void);
+void ioapic_route_irq0_to_vector32(void);
+void ioapic_route_irq1_to_vector33(void);
+
 uint64_t apic_discover(apic_info_t *out);
 uint64_t apic_get_lapic_phys_addr(void);
 void apic_dump_info(const apic_info_t *info);

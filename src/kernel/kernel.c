@@ -3,6 +3,7 @@
 #include "include/cpu/idt.h"
 #include "include/cpu/isr.h"
 #include "include/cpu/apic.h"
+#include "include/cpu/timer.h"
 #include "include/driver/fat32.h"
 #include "include/driver/storage.h"
 #include "include/driver/vga.h"
@@ -18,13 +19,13 @@
 
 apic_info_t info;
 
+extern uint64_t tick;
+
 int main() {
     set_cursor_pos(0, 0);
     clearwin(COLOR_WHT, COLOR_BLK);
 
     isr_install();
-    init_syscalls();
-    irq_install();
     init_memory();
     init_page_table();
 
@@ -34,7 +35,16 @@ int main() {
     }
 
     apic_dump_info(&info);
-    uint64_t lapic_phys = apic_get_lapic_phys_addr();
+
+    irq_install();
+    init_syscalls();
+    
+    uint64_t hz = get_cpu_hz(PIT_HZ, 50);
+    printf("Clock Speed: %lu MHz\n", hz / 1000000ULL);
+    
+    uint64_t t0 = tick;
+    for (__volatile__ uint64_t i = 0; i < 300000000ULL; ++i) {}
+    printf("tick delta=%lu\n", tick - t0);
 
     init_kalloc(HEAP_BASE, HEAP_PAGES);
     init_bpb();

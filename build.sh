@@ -63,8 +63,8 @@ function all {
 
     $AS $AOFLAGS $KERNEL/entry.s -o $OBJ/kernel/entry.o
     $AS $AOFLAGS $KERNEL/cpu/interrupts.s -o $OBJ/kernel/interrupts.o
-    # $LD $LFLAGS $OBJ/kernel/entry.o $OBJ/kernel/interrupts.o "${OBJSK[@]}" -o $BIN/kernel.elf
-    $LD $LFLAGS --oformat binary $OBJ/kernel/entry.o $OBJ/kernel/interrupts.o "${OBJSK[@]}" -o $BIN/kernel.bin
+    $AS $AOFLAGS $KERNEL/cpu/speed.s -o $OBJ/kernel/speed.o
+    $LD $LFLAGS --oformat binary $OBJ/kernel/entry.o $OBJ/kernel/interrupts.o $OBJ/kernel/speed.o "${OBJSK[@]}" -o $BIN/kernel.bin
     kernel_size=$(wc -c <$BIN/kernel.bin)
     kernel_sectors=$((($kernel_size + 511) / 512))
 
@@ -147,7 +147,7 @@ function clean {
     rm -rf $OBJ
     rm -rf $BIN
     rm -rf $BUILD
-    rm qemu.log
+    rm qemu.log 2>/dev/null
 }
 
 if [ "$1" = "" ]; then

@@ -10,7 +10,6 @@ static const char SIG_RSDT[4] = { 'R', 'S', 'D', 'T' };
 static const char SIG_XSDT[4] = { 'X', 'S', 'D', 'T' };
 static const char SIG_MADT[4] = { 'A', 'P', 'I', 'C' };
 
-
 #define IDMAP_LIMIT         0x100000000ULL
 #define ACPI_MAX_TABLE_LEN  0x100000ULL
 
@@ -25,6 +24,21 @@ static const char SIG_MADT[4] = { 'A', 'P', 'I', 'C' };
 #define MADT_TYPE_LOCAL_APIC_NMI            4
 #define MADT_TYPE_LOCAL_APIC_ADDR_OVERRIDE  5
 #define MADT_TYPE_LOCAL_X2APIC              9
+
+#define PAGE_PRESENT 0x01
+#define PAGE_RW      0x02
+#define PAGE_PCD     0x10
+
+#define LAPIC_PHYS  0xFEE00000ULL
+#define IOAPIC_PHYS 0xFEC00000ULL
+
+#define LAPIC_ID_REG    0x20
+#define LAPIC_EOI_REG   0xB0
+#define LAPIC_SVR_REG   0xF0
+
+#define IOREGSEL        0x00
+#define IOWIN           0x10
+
 
 typedef struct __attribute__((packed)) {
     char signature[8];
@@ -90,7 +104,6 @@ typedef struct __attribute__((packed)) {
 
 static apic_info_t g_apic_info;
 
-
 static inline uint64_t rdmsr(uint32_t msr) {
     uint32_t lo, hi;
     __asm__ __volatile__(
@@ -99,6 +112,43 @@ static inline uint64_t rdmsr(uint32_t msr) {
         : "c"(msr)
     );
     return ((uint64_t)hi << 32) | lo;
+}
+
+static inline void wrmsr(uint32_t msr, uint64_t v) {
+    uint32_t lo = (uint32_t)v;
+    uint32_t hi = (uint32_t)(v >> 32);
+    __asm__ __volatile__(
+        "wrmsr"
+        :
+        : "c"(msr), "a"(lo), "d"(hi)
+    );
+}
+
+static inline uint32_t lapic_read(uint64_t base, uint32_t reg) {
+    return *(__volatile__ uint32_t *)((uint8_t *)base + reg);
+}
+
+static inline void lapic_write(uint64_t base, uint32_t reg, uint32_t v) {
+    *(__volatile__ uint32_t *)((uint8_t *)base + reg);
+    (void)lapic_read(base, LAPIC_ID_REG);
+}
+
+static inline uint32_t ioapic_read(uint64_t base, uint8_t reg) {
+    *(__volatile__ uint32_t *)((uint8_t *)base + IOREGSEL) = reg;
+    return *(__volatile__ uint32_t *)((uint8_t *)base + IOWIN);
+}
+
+static inline void ioapic_write(uint64_t base, uint8_t reg, uint32_t v) {
+    *(__volatile__ uint32_t *)((uint8_t *)base + IOREGSEL) = reg;
+    *(__volatile__ uint32_t *)((uint8_t *)base + IOWIN) = v;
+}
+
+static uint64_t apic_base_from_msr(void) {
+    uint64_t v = rdmsr(IA32_APIC_BASE_MSR);
+    if ((v & IA32_APIC_BASE_EN) == 0)
+        return 0;
+
+    return v & IA32_APIC_BASE_MASK;
 }
 
 static uint64_t memeq(const void *a, const void *b, uint64_t n) {
@@ -120,18 +170,9 @@ static uint8_t acpi_checksum8(const void *ptr, uint64_t len) {
     return sum;
 }
 
-static inline uint32_t lapic_read32(uint64_t base, uint32_t reg) {
-    __volatile__ uint32_t *p = (__volatile__ uint32_t *)(base + reg);
-    return *p;
-}
-
 static void map_phys_range_identity(uint64_t base, uint64_t len) {
     uint64_t start = base & ~0xFFFULL;
     uint64_t end = (base + len + 0xFFFULL) & ~0xFFFULL;
-
-#define PAGE_PRESENT 0x01
-#define PAGE_RW      0x02
-#define PAGE_PCD     0x10
 
     for (uint64_t p = start; p < end; p += 0x1000)
         map_page((void *)p, (void *)p, PAGE_PRESENT | PAGE_RW | PAGE_PCD);
@@ -172,21 +213,8 @@ static rsdp_t *find_rsdp(void) {
     return scan_rsdp_range(0xE0000, 0x100000);
 }
 
-static uint64_t phys_range_mapped(uint64_t base, uint64_t size) {
-    if (!base || !size)
-        return 0;
-
-    if (base >= IDMAP_LIMIT)
-        return 0;
-    
-    if (size > (IDMAP_LIMIT - base))
-        return 0;
-
-    return 1;
-}
-
 static uint64_t sdt_valid(acpi_sdt_header_t *h) {
-    if (h == NULL)
+    if (!h)
         return 0;
 
     map_phys_range_identity((uint64_t)h, sizeof(acpi_sdt_header_t));
@@ -273,12 +301,12 @@ static void parse_madt(madt_t *madt, apic_info_t *out) {
                 out->cpu_count++;
             }
 
-            printf("MADT LOCAL APIC\n");
+            // printf("MADT LOCAL APIC\n");
         } else if (eh->type == MADT_TYPE_LOCAL_APIC_ADDR_OVERRIDE &&
                    eh->length >= sizeof(madt_lapic_addr_override_t)) {
             madt_lapic_addr_override_t *e = (madt_lapic_addr_override_t *)p;
             out->lapic_phys_addr = e->lapic_phys_addr;
-            printf("MADT LOCAL APIC ADDR OVERRIDE\n");
+            // printf("MADT LOCAL APIC ADDR OVERRIDE\n");
         } else if (eh->type == MADT_TYPE_LOCAL_X2APIC &&
                    eh->length >= sizeof(madt_local_x2apic_t)) {
             madt_local_x2apic_t *e = (madt_local_x2apic_t *)p;
@@ -290,19 +318,65 @@ static void parse_madt(madt_t *madt, apic_info_t *out) {
                 out->cpu_count++;
             }
             
-            printf("MADT LOCAL X2APIC\n");
+            // printf("MADT LOCAL X2APIC\n");
         }
         
         p += eh->length;
     }
 }
 
-static uint64_t apic_base_from_msr(void) {
+void apic_enable_lapic(void) {
     uint64_t v = rdmsr(IA32_APIC_BASE_MSR);
-    if ((v & IA32_APIC_BASE_EN) == 0)
-        return 0;
+    v |= IA32_APIC_BASE_EN;
+    wrmsr(IA32_APIC_BASE_MSR, v);
 
-    return v & IA32_APIC_BASE_MASK;
+    uint64_t lapic_base = v & IA32_APIC_BASE_MASK;
+    if (!lapic_base)
+        lapic_base = apic_get_lapic_phys_addr();
+
+    map_phys_range_identity(lapic_base, 0x1000);
+    map_phys_range_identity(IOAPIC_PHYS, 0x1000);
+
+    lapic_write(lapic_base, LAPIC_SVR_REG, 0x100 | 0xFF);
+}
+
+void apic_eoi(void) {
+    uint64_t lapic_base = apic_get_lapic_phys_addr();
+    if (!lapic_base)
+        lapic_base = apic_base_from_msr();
+
+    lapic_write(lapic_base, LAPIC_EOI_REG, 0);
+}
+
+static void ioapic_route_isa_irq(uint8_t irq, uint8_t vector) {
+    uint64_t lapic_base = apic_get_lapic_phys_addr();
+    if (!lapic_base)
+        lapic_base = apic_base_from_msr();
+    
+    uint32_t lapic_id = lapic_read(lapic_base, LAPIC_ID_REG) >> 24;
+    uint8_t lo_reg = (uint8_t)(0x10 + irq * 2);
+    uint8_t hi_reg = (uint8_t)(lo_reg + 1);
+
+    uint32_t low = vector;
+    low &= ~(1u << 16);
+    low &= ~(1u << 15);
+    low &= ~(1u << 13);
+    low &= ~(7u << 8);
+    low &= ~(1u << 11);
+
+    uint32_t high = lapic_id << 24;
+
+    ioapic_write(IOAPIC_PHYS, hi_reg, high);
+    ioapic_write(IOAPIC_PHYS, lo_reg, low);
+}
+
+void ioapic_route_irq0_to_vector32(void) {
+    ioapic_route_isa_irq(0, 32);
+    ioapic_route_isa_irq(2, 32);
+}
+
+void ioapic_route_irq1_to_vector33(void) {
+    ioapic_route_isa_irq(1, 33);
 }
 
 uint64_t apic_discover(apic_info_t *out) {
@@ -319,19 +393,7 @@ uint64_t apic_discover(apic_info_t *out) {
         return out->lapic_phys_addr != 0;
     }
 
-    madt_t *madt= find_madt(rsdp);
-    
-    printf("RSDP=%p rev=%u rsdt=%x xsdt=%ld\n",
-            rsdp, (uint64_t)rsdp->revision,
-            (uint64_t)rsdp->rsdt_address, rsdp->xsdt_address);
-
-    printf("MADT=%p\n", madt);
-    if (madt)
-        printf("MADT len=%u lapic=%x flags=%x\n",
-                (uint64_t)madt->h.length,
-                (uint64_t)madt->lapic_addr,
-                (uint64_t)madt->flags);
-    
+    madt_t *madt = find_madt(rsdp);
     if (!madt || !sdt_valid(&madt->h)) {
         out->lapic_phys_addr = apic_base_from_msr();
         g_apic_info = *out;

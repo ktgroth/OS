@@ -46,9 +46,17 @@ static uint8_t page_bitmap[BITMAP_SIZE];
 static uint64_t heap_start;
 static uint64_t heap_end;
 static uint64_t heap_current;
-static uint64_t phys_base_addr;
+static uint64_t phys_base_addr = 0x200000;
 
 extern mmap_t DETECTED_MEMORY;
+
+static char *mem_types[] = {
+    "Usable (1)",
+    "Reserved (2)",
+    "ACPI Reclaimable (3)",
+    "ACPI NVS (4)",
+    "Bad Memory (5)"
+};
 
 
 void init_memory() {
@@ -59,25 +67,8 @@ void init_memory() {
         uint64_t length = buffer[i].length;
         uint32_t type = buffer[i].type;
         uint32_t ACPI = buffer[i++].ACPI;
- 
-        // char base_str[66] = "";
-        // char length_str[66] = "";
-        // char type_str[66] = "";
-
-        if (type == 1 && phys_base_addr == 0)
-            phys_base_addr = base;
-
-        // hex_to_ascii(base, base_str);
-        // hex_to_ascii(length, length_str);
-        // int_to_ascii(type, type_str);
-        //
-        // putstr("BASE: ", COLOR_WHT, COLOR_BLK);
-        // putstr(base_str, COLOR_WHT, COLOR_BLK);
-        // putstr(", LENGTH: ", COLOR_WHT, COLOR_BLK);
-        // putstr(length_str, COLOR_WHT, COLOR_BLK);
-        // putstr(", TYPE: ", COLOR_WHT, COLOR_BLK);
-        // putstr(type_str, COLOR_WHT, COLOR_BLK);
-        // putstr("\n", COLOR_WHT, COLOR_BLK);
+        printf("BASE: %lx, LEN: %lx, TYPE: %s, ACPI: %u\n",
+                base, length, mem_types[type - 1], ACPI);
     }
 }
 

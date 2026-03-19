@@ -5,14 +5,17 @@
 #include "../include/driver/vga.h"
 #include "../include/libc/string.h"
 #include "../include/libc/function.h"
+#include "../include/libc/printf.h"
 
 #define CHANNEL_0   0x40
 #define CHANNEL_1   0x41
 #define CHANNEL_2   0x42
 #define COMMAND     0x43
 
-uint32_t tick = 0;
+extern uint64_t calc_hz(uint64_t freq, uint64_t sample_ticks);
 
+extern __volatile__ uint64_t tick;
+__volatile__ uint64_t tick = 0;
 
 static void timer_callback(registers_t *regs) {
     ++tick;
@@ -22,13 +25,13 @@ static void timer_callback(registers_t *regs) {
 void init_timer(uint32_t freq) {
     register_interrupt_handler(IRQ0, timer_callback);
 
-    uint32_t divisor = 1193180 / freq;
+    uint32_t divisor = 1193182 / freq;
     uint8_t low = (uint8_t)(divisor & 0xFF);
     uint8_t high = (uint8_t)((divisor >> 8) & 0xFF);
 
     outb(COMMAND, 0x36);
-    outb(COMMAND, low);
-    outb(COMMAND, high);
+    outb(CHANNEL_0, low);
+    outb(CHANNEL_0, high);
 }
 
 uint64_t read_pit_count() {
@@ -39,6 +42,8 @@ uint64_t read_pit_count() {
     tick = inb(CHANNEL_0);
     tick |= inb(CHANNEL_0) << 8;
 
+    __asm__ __volatile__("sti");
+
     return tick;
 }
 
@@ -47,6 +52,8 @@ void set_pit_count() {
 
     outb(CHANNEL_0, tick & 0xFF);
     outb(CHANNEL_0, (tick & 0xFF00) >> 8);
+    
+    __asm__ __volatile__("sti");
 }
 
 void sleep(uint64_t millis) {

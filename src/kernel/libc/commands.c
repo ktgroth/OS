@@ -78,12 +78,8 @@ void user_input(char *input) {
 }
 
 static void cmd_help(int argc, char **argv) {
-    for (int64_t i = 0; i < command_count; ++i) {
-        putstr(commands[i].name, COLOR_WHT, COLOR_BLK);
-        putstr(": ", COLOR_WHT, COLOR_BLK);
-        putstr(commands[i].help, COLOR_WHT, COLOR_BLK);
-        putchar('\n', COLOR_WHT, COLOR_BLK);
-    }
+    for (int64_t i = 0; i < command_count; ++i)
+        printf("%s: %s\n", commands[i].name, commands[i].help);
 
     putstr("> ", COLOR_WHT, COLOR_BLK);
 }
@@ -116,19 +112,10 @@ static void cmd_ls(int argc, char **argv) {
 
 static void cmd_alloc(int argc, char **argv) {
     mblock_t *block = kmalloc(0x1000);
-    uint64_t *virt_addr = &block->addr;
-    uint64_t *phys_addr = (uint64_t *)get_paddr(virt_addr);
-    char virt_str[66] = "";
-    hex_to_ascii((uint64_t)virt_addr, virt_str);
-
-    char phys_str[66] = "";
-    hex_to_ascii((uint64_t)phys_addr, phys_str);
-
-    putstr("VAddr: ", COLOR_WHT, COLOR_BLK);
-    putstr(virt_str, COLOR_WHT, COLOR_BLK);
-    putstr(", PAddr: ", COLOR_WHT, COLOR_BLK);
-    putstr(phys_str, COLOR_WHT, COLOR_BLK);
-    putstr("\n> ", COLOR_WHT, COLOR_BLK);
+    void *vaddr = &block->addr;
+    void *paddr = (uint64_t *)get_paddr(vaddr);
+    
+    printf("PADDR: %x\nVADDR: %x\n> ", paddr, vaddr);
 }
 
 static void cmd_shutdown(int argc, char **argv) {

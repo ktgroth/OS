@@ -3,9 +3,11 @@
 #include "../include/cpu/isr.h"
 #include "../include/cpu/ports.h"
 #include "../include/cpu/timer.h"
+#include "../include/cpu/apic.h"
 #include "../include/driver/vga.h"
 #include "../include/driver/keyboard.h"
 #include "../include/libc/string.h"
+#include "../include/libc/printf.h"
 
 isr_t interrupt_handlers[IDT_ENTRIES];
 
@@ -47,6 +49,51 @@ char *exception_messages[] = {
     "Reserved"
 };
 
+static inline void pic_io_wait(void) {
+    __asm__ __volatile__("outb %%al, $0x80" : : "a"(0));
+}
+
+static inline uint64_t rdmsr(uint32_t msr) {
+    uint32_t lo, hi;
+    __asm__ __volatile__(
+        "rdmsr"
+        : "=a"(lo), "=d"(hi)
+        : "c"(msr)
+    );
+    return ((uint64_t)hi << 32) | lo;
+}
+
+static inline void wrmsr(uint32_t msr, uint64_t v) {
+    uint32_t lo = (uint32_t)v;
+    uint32_t hi = (uint32_t)(v >> 32);
+    __asm__ __volatile__(
+        "wrmsr"
+        :
+        : "c"(msr), "a"(lo), "d"(hi)
+    );
+}
+
+static void disable_lapic(void) {
+    const uint32_t IA32_APIC_BASE_MSR = 0x1B;
+    uint64_t v = rdmsr(IA32_APIC_BASE_MSR);
+    v &= ~(1ULL << 11);
+    wrmsr(IA32_APIC_BASE_MSR, v);
+}
+
+static void pic_remap(void) {
+    outb(0x20, 0x11); pic_io_wait();
+    outb(0xA0, 0x11); pic_io_wait();
+    outb(0x21, 0x20); pic_io_wait();
+    outb(0xA1, 0x28); pic_io_wait();
+    outb(0x21, 0x04); pic_io_wait();
+    outb(0xA1, 0x02); pic_io_wait();
+    outb(0x21, 0x01); pic_io_wait();
+    outb(0xA1, 0x01); pic_io_wait();
+    
+    outb(0x21, 0xFE); pic_io_wait();
+    outb(0xA1, 0xFF); pic_io_wait();
+}
+
 void isr_install(void) {
     set_idt_gate(0, (uint64_t)isr0);
     set_idt_gate(1, (uint64_t)isr1);
@@ -82,17 +129,6 @@ void isr_install(void) {
     set_idt_gate(31, (uint64_t)isr31);
     set_idt_gate_with_flags(128, (uint64_t)isr128, 0x8E);
 
-    outb(0x20, 0x11);
-    outb(0xA0, 0x11);
-    outb(0x21, 0x20);
-    outb(0xA1, 0x28);
-    outb(0x21, 0x04);
-    outb(0xA1, 0x02);
-    outb(0x21, 0x01);
-    outb(0xA1, 0x01);
-    outb(0x21, 0x00);
-    outb(0xA1, 0x00);
-
     set_idt_gate(32, (uint64_t)irq0);
     set_idt_gate(33, (uint64_t)irq1);
     set_idt_gate(34, (uint64_t)irq2);
@@ -114,10 +150,24 @@ void isr_install(void) {
 }
 
 void irq_install() {
-    __asm__ __volatile__("sti");
-
-    init_timer(50);
+    pic_remap();
+    outb(0x21, 0xFC);
+    outb(0xA1, 0xFF);
+    
+    apic_enable_lapic();
+    init_timer(PIT_HZ);
     init_keyboard();
+    __asm__ __volatile__("sti");
+}
+
+static inline uint64_t read_cr2(void) {
+    uint64_t cr2;
+    __asm__ __volatile__(
+        "mov %%cr2, %0"
+        : "=r"(cr2)
+    );
+
+    return cr2;
 }
 
 void isr_handler(registers_t *r) {
@@ -130,6 +180,18 @@ void isr_handler(registers_t *r) {
         putstr("Exception: ", COLOR_WHT, COLOR_RED);
         putstr(exception_messages[r->irq_number], COLOR_WHT, COLOR_RED);
         putstr("\n", COLOR_WHT, COLOR_RED);
+        
+        if (r->irq_number == 14) {
+            uint64_t cr2 = read_cr2();
+            printf("PF: cr2=%lx err=%lx\n", cr2, r->error_code);
+        }
+
+        char ins[66] = "";
+        hex_to_ascii(r->rip, ins);
+        putstr("At RIP=", COLOR_WHT, COLOR_RED);
+        putstr(ins, COLOR_WHT, COLOR_RED);
+        putstr("\n", COLOR_WHT, COLOR_RED);
+
 
         for (;;)
             __asm__ __volatile__("hlt");
@@ -143,9 +205,10 @@ void register_interrupt_handler(uint8_t n, isr_t handler) {
 void irq_handler(registers_t *r) {
     if (r->irq_number >= 40)
         outb(0xA0, 0x20);
-
     outb(0x20, 0x20);
-    if (interrupt_handlers[r->irq_number] != 0) {
+
+    apic_eoi();
+    if (interrupt_handlers[r->irq_number]) {
         isr_t handler = interrupt_handlers[r->irq_number];
         handler(r);
     }

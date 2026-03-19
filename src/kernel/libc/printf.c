@@ -146,7 +146,7 @@ uint64_t kvprintf(const char *fmt, va_list ap) {
             case 'x': {
                 uint64_t v = long_mod ? (uint64_t)va_arg(ap, unsigned long) : (uint64_t)va_arg(ap, unsigned int);
                 putstr("0x", COLOR_WHT, COLOR_BLK);
-                print_u(v, 16, 0, width, zero_pad, &written);
+                print_u(v, 16, 1, width, zero_pad, &written);
             } break;
 
             case 'X': {
@@ -156,10 +156,10 @@ uint64_t kvprintf(const char *fmt, va_list ap) {
             } break;
 
             case 'p': {
-                void * p = (void *)va_arg(ap, void *);
+                void *p = (void *)va_arg(ap, void *);
                 putstr("0x", COLOR_WHT, COLOR_BLK);
                 int32_t ptr_width = (int32_t)(sizeof(void *) * 2);
-                print_u((uint64_t)p, 16, 0, ptr_width, 1, &written);
+                print_u((uint64_t)p, 16, 1, ptr_width, 1, &written);
             } break;
 
             default: {
