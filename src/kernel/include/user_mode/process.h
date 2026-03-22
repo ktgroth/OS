@@ -2,20 +2,14 @@
 #define USER_PROCESS
 
 #include "../cpu/isr.h"
-#include "../libc/memory.h"
 #include "../libc/types.h"
 
 
 #define MAX_PROCESSES       64
 #define PROCESS_NAME_LEN    32
+#define PROCESS_STACK_SIZE  0x4000
 
-#define PAGE_SIZE           0x1000ULL
-#define USER_CODE_BASE      0x0000000000400000ULL
-#define USER_STACK_TOP      0x0000000000800000ULL
-#define USER_STACK_PAGES    8ULL
-#define USER_HEAP_BASE      0x0000000000900000ULL
-#define USER_HEAP_MAX_PAGES 256ULL
-
+typedef uint64_t (*app_entry_t)(void);
 
 typedef enum {
     PROC_UNUSED = 0,
@@ -30,23 +24,25 @@ typedef struct process {
     uint64_t ppid;
     proc_state_e state;
 
-    registers_t *call_frame;
-    registers_t *sregs;
+    char name[PROCESS_NAME_LEN];
 
-    pml4_t *image_base;
-    uint64_t image_size;
+    registers_t regs;
+    app_entry_t entry;
 
-    uint64_t brk_start;
-    uint64_t brk_end;
-    uint64_t brk_limit;
+    uint64_t exit_code;
+    uint8_t cancel_requested;
+    uint8_t in_run_queue;
 } process_t;
 
 
-process_t *create_new_process();
+process_t *create_new_process(void);
+process_t *create_process(app_entry_t entry, const char *name);
 void destroy_process(process_t *proc);
 
 process_t *current_process(void);
 void set_current_process(process_t *p);
+
+void process_mark_exit(uint64_t code);
 
 #endif
 

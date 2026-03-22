@@ -129,7 +129,7 @@ static inline uint32_t lapic_read(uint64_t base, uint32_t reg) {
 }
 
 static inline void lapic_write(uint64_t base, uint32_t reg, uint32_t v) {
-    *(__volatile__ uint32_t *)((uint8_t *)base + reg);
+    *(__volatile__ uint32_t *)((uint8_t *)base + reg) = v;
     (void)lapic_read(base, LAPIC_ID_REG);
 }
 

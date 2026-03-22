@@ -92,16 +92,18 @@ FAT1:
     dd 0xFFFFFFFF
     dd 0x0FFFFFFF
     dd 0x0FFFFFFF
+    dd 0x0FFFFFFF
 ; #FATS * SPF * BPS
-times (9 * 512 - 16) db 0x00
+times (9 * 512 - 20) db 0x00
 
 FAT2:
     dd 0x0FFFFFF8
     dd 0xFFFFFFFF
     dd 0x0FFFFFFF
     dd 0x0FFFFFFF
+    dd 0x0FFFFFFF
 ; #FATS * SPF * BPS
-times (9 * 512 - 16) db 0x00
+times (9 * 512 - 20) db 0x00
 
 ROOT_DIRECTORY:
 ROOT_CLUSTER_DATA:
@@ -117,7 +119,20 @@ ROOT_CLUSTER_DATA:
     dw 0x0000
     dw 0x0003
     dd hello_bin_size
+
+    db 'INF     BIN'
+    db 0x20
     db 0x00
+    db 0x00
+    dw 0x0000
+    dw 0x0000
+    dw 0x0000
+    dw 0x0000
+    dw 0x0000
+    dw 0x0000
+    dw 0x0004
+    dd printinf_bin_size
+
 ; (#RDE * 32 - 1) / BPS
 times (512 - ($ - ROOT_DIRECTORY)) db 0x00
 
@@ -126,7 +141,14 @@ hello_bin_start:
     incbin "bin/hello.bin"
 hello_bin_end:
 hello_bin_size equ hello_bin_end - hello_bin_start
-    times (512 - (hello_bin_size % 512)) % 512 db 0x00
+times (512 - (hello_bin_size % 512)) % 512 db 0x00
+
+PRINTINF_CLUSTER_DATA:
+printinf_bin_start:
+    incbin "bin/print_inf.bin"
+printinf_bin_end:
+printinf_bin_size equ printinf_bin_end - printinf_bin_start
+times (512 - (printinf_bin_size % 512)) % 512 db 0x00
 
 bootloader_extended:
 begin_protected:

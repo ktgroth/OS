@@ -5,11 +5,13 @@
 #include "../include/libc/types.h"
 #include "../include/libc/printf.h"
 #include "../include/libc/string.h"
+#include "../include/user_mode/process.h"
+#include "../include/user_mode/scheduler.h"
 
 #include "../include/driver/syscalls/brk.h"
 #include "../include/driver/syscalls/exec.h"
-#include "../include/driver/syscalls/fork.h"
 #include "../include/driver/syscalls/exit.h"
+#include "../include/driver/syscalls/fork.h"
 #include "../include/driver/syscalls/write.h"
 
 
@@ -53,7 +55,8 @@ static void syscall_dispatch(registers_t *r) {
             break;
 
         case SYS_EXIT:
-            sys_exit(r->rdi);
+            r->rax = sys_exit(r->rdi);
+            scheduler_on_tick(r);
             break;
 
         // case SYS_WAIT4: {

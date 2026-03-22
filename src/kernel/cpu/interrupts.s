@@ -51,44 +51,32 @@ QUADWORD_SIZE equ 0x08
 %macro ISR_NOERRCODE 1
 global isr%1
 isr%1:
-    cli
-
     push qword 0
     push qword %1
     SAVE_REGS_AND_CALL_HANDLER isr_handler
 
     add rsp, 0x10
-    sti
-
     iretq
 %endmacro
 
 %macro ISR_ERRCODE 1
 global isr%1
 isr%1:
-    cli
-
     push qword %1
     SAVE_REGS_AND_CALL_HANDLER isr_handler
 
     add rsp, 0x10
-    sti
-
     iretq
 %endmacro
 
 %macro IRQ_CODE 2
 global irq%1
 irq%1:
-    cli
-
     push qword %1
     push qword %2
     SAVE_REGS_AND_CALL_HANDLER irq_handler
 
     add rsp, 0x10
-    sti
-
     iretq
 %endmacro
 

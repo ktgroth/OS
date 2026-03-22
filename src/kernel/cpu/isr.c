@@ -151,10 +151,13 @@ void isr_install(void) {
 
 void irq_install() {
     pic_remap();
-    outb(0x21, 0xFC);
+    outb(0x21, 0xFF);
     outb(0xA1, 0xFF);
     
     apic_enable_lapic();
+    ioapic_route_irq0_to_vector32();
+    ioapic_route_irq1_to_vector33();
+
     init_timer(PIT_HZ);
     init_keyboard();
     __asm__ __volatile__("sti");

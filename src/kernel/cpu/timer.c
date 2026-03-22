@@ -6,6 +6,7 @@
 #include "../include/libc/string.h"
 #include "../include/libc/function.h"
 #include "../include/libc/printf.h"
+#include "../include/user_mode/scheduler.h"
 
 #define CHANNEL_0   0x40
 #define CHANNEL_1   0x41
@@ -19,7 +20,7 @@ __volatile__ uint64_t tick = 0;
 
 static void timer_callback(registers_t *regs) {
     ++tick;
-    UNUSED(regs);
+    scheduler_on_tick(regs);
 }
 
 void init_timer(uint32_t freq) {

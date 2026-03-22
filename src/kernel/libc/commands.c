@@ -9,6 +9,8 @@
 #include "../include/libc/memory.h"
 #include "../include/libc/string.h"
 #include "../include/libc/app.h"
+#include "../include/user_mode/process.h"
+#include "../include/user_mode/scheduler.h"
 
 #define MAX_INPUT 4096
 #define MAX_ARGS 16
@@ -133,8 +135,12 @@ static void cmd_write(int argc, char **argv) {
 }
 
 
-#define APP_LOAD_ADDR ((uint8_t *)0x200000)
-#define MAX_APP_SIZE (1024 * 1024)
+#define APP_LOAD_MIN    ((uint8_t *)0x200000)
+#define APP_ALIGN       0x1000
+#define APP_FILE_MAX    (0x400 * 0x400)
+
+static uint8_t *next_app_addr = APP_LOAD_MIN;
+
 
 static int to_name(const char *in, char out[11]) {
     uint64_t i = 0, j = 0;
@@ -224,14 +230,6 @@ static void cmd_print(int argc, char **argv) {
     putstr("\n\n> ", COLOR_WHT, COLOR_BLK);
 }
 
-
-#define APP_LOAD_MIN    ((uint8_t *)0x200000)
-#define APP_ALIGN       0x1000
-#define APP_FILE_MAX    (0x400 * 0x400)
-
-
-static uint8_t *next_app_addr = APP_LOAD_MIN;
-
 static uint8_t *align_up_ptr(uint8_t *p, uint64_t align) {
     uint64_t v = (uint64_t)p;
     v = (v + align - 1) & ~(align - 1);
@@ -239,77 +237,87 @@ static uint8_t *align_up_ptr(uint8_t *p, uint64_t align) {
 }
 
 static uint8_t *alloc_app_region(uint64_t total_size) {
-    uint8_t *base = align_up_ptr(next_app_addr, APP_ALIGN);
-    uint8_t *end = base + total_size;
+    mblock_t *block = kmalloc(total_size); 
+    uint8_t *base = (uint8_t *)&block->addr;
+    uint8_t *end = base + block->size;
+
     next_app_addr = end;
     return base;
 }
+
 
 static void cmd_run(int argc, char **argv) {
     if (argc < 2) {
         putstr("Usage: RUN <NAME.EXT>\n> ", COLOR_WHT, COLOR_BLK);
         return;
     }
-    
-    char name[11];
-    directory_t ent;
-    to_name(argv[1], name);
+   
+    uint64_t queued = 0;
 
-    if (!find_root_entry(name, &ent)) {
-        putstr("RUN: file not found\n> ", COLOR_WHT, COLOR_BLK);
-        return;
+    for (uint64_t i = 1; i < argc; ++i) {
+        char name[11];
+        directory_t ent;
+
+        to_name(argv[i], name);
+
+        if (!find_root_entry(name, &ent)) {
+            putstr("RUN: file not found\n> ", COLOR_WHT, COLOR_BLK);
+            return;
+        }
+
+        if (ent.flags & DIRECTORY) {
+            putstr("RUN: is directory\n> ", COLOR_WHT, COLOR_BLK);
+            return;
+        }
+
+        if (ent.bytes == 0 || ent.bytes > APP_FILE_MAX) {
+            putstr("RUN: bad file size\n> ", COLOR_WHT, COLOR_BLK);
+            return;
+        }
+
+        uint8_t *file_base = alloc_app_region(ent.bytes);
+        if (!file_base) {
+            putstr("RUN: out of app memory\n> ", COLOR_WHT, COLOR_BLK);
+            return;
+        }
+
+        uint32_t start_cluster = ((uint32_t)ent.fc_hi << 16) | ent.fc_lo;
+        if (!read_file_chain(start_cluster, file_base, ent.bytes)) {
+            putstr("RUN: read failed\n> ", COLOR_WHT, COLOR_BLK);
+            return;
+        }
+
+        app_header_t *hdr = (app_header_t *)file_base;
+        if (hdr->magic != APP_MAGIC || hdr->version != APP_VERSION) {
+            putstr("RUN: bad app header\n> ", COLOR_WHT, COLOR_BLK);
+            return;
+        } if (!(hdr->flags & APP_FLAG_PIE)) {
+            putstr("RUN: app not PIE\n> ", COLOR_WHT, COLOR_BLK);
+            return;
+        }
+
+        uint8_t *payload = file_base + sizeof(app_header_t);
+        if (hdr->image_size != (uint64_t)(ent.bytes - sizeof(app_header_t))) {
+            printf("Expected: %lu\nRead: %lu\n", ent.bytes - sizeof(app_header_t), hdr->image_size);
+            putstr("RUN: size mismatch\n> ", COLOR_WHT, COLOR_BLK);
+            return;
+        } if (hdr->entry_off >= hdr->image_size) {
+            putstr("RUN: bad entry\n> ", COLOR_WHT, COLOR_BLK);
+            return;
+        }
+
+        app_entry_t entry = (app_entry_t)(payload + hdr->entry_off);
+        process_t *p = create_process(entry, argv[i]);
+        if (!p) {
+            printf("RUN: process table full: %s\n", argv[i]);
+            continue;
+        }
+        
+        scheduler_enqueue(p);
+        printf("RUN: queued pid=%lu %s\n", p->pid, argv[i]);
+        queued++;
     }
 
-    if (ent.flags & DIRECTORY) {
-        putstr("RUN: is directory\n> ", COLOR_WHT, COLOR_BLK);
-        return;
-    }
-
-    if (ent.bytes == 0 || ent.bytes > MAX_APP_SIZE) {
-        putstr("RUN: bad file size\n> ", COLOR_WHT, COLOR_BLK);
-        return;
-    }
-
-    uint8_t *file_base = alloc_app_region(ent.bytes);
-    if (!file_base) {
-        putstr("RUN: out of app memory\n> ", COLOR_WHT, COLOR_BLK);
-        return;
-    }
-
-    uint32_t start_cluster = ((uint32_t)ent.fc_hi << 16) | ent.fc_lo;
-    if (!read_file_chain(start_cluster, file_base, ent.bytes)) {
-        putstr("RUN: read failed\n> ", COLOR_WHT, COLOR_BLK);
-        return;
-    }
-
-    app_header_t *hdr = (app_header_t *)file_base;
-    // printf("%x\n", hdr->magic);
-    // printf("%x\n", hdr->version);
-    // printf("%x\n", hdr->entry_off);
-    // printf("%x\n", hdr->image_size);
-    // printf("%x\n", hdr->flags);
-
-    if (hdr->magic != APP_MAGIC || hdr->version != APP_VERSION) {
-        putstr("RUN: bad app header\n> ", COLOR_WHT, COLOR_BLK);
-        return;
-    } if (!(hdr->flags & APP_FLAG_PIE)) {
-        putstr("RUN: app not PIE\n> ", COLOR_WHT, COLOR_BLK);
-        return;
-    }
-
-    uint8_t *payload = file_base + sizeof(app_header_t);
-    // printf("SIZE: %d\nEXPECTED: %d\n", hdr->image_size, ent.bytes - sizeof(app_header_t));
-    if (hdr->image_size != (uint64_t)(ent.bytes - sizeof(app_header_t))) {
-        putstr("RUN: size mismatch\n> ", COLOR_WHT, COLOR_BLK);
-        return;
-    } if (hdr->entry_off >= hdr->image_size) {
-        putstr("RUN: bad entry\n> ", COLOR_WHT, COLOR_BLK);
-        return;
-    }
-
-    typedef uint64_t (*app_entry_t)(void);
-    app_entry_t entry = (app_entry_t)(payload + hdr->entry_off);
-    uint64_t code = entry();
-    printf("%u\n> ", code);
+    printf("RUN: queued %lu process(es)\n> ", queued);
 }
 
