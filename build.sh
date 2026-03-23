@@ -123,6 +123,7 @@ function run {
         -smp 8,sockets=1,cores=4,threads=2,maxcpus=8 \
         -hda $OUTPUT \
         -monitor stdio \
+        -serial file:serial.log \
         -no-reboot \
         -d in_asm,cpu_reset \
         -D qemu.log \
@@ -137,6 +138,7 @@ function debug {
         -smp 8,sockets=1,cores=4,threads=2,maxcpus=8 \
         -hda $OUTPUT \
         -monitor stdio \
+        -serial file:serial.log \
         -no-reboot \
         -d in_asm,cpu_reset \
         -D qemu.log \
@@ -163,6 +165,7 @@ function clean {
     rm -rf $BIN
     rm -rf $BUILD
     rm qemu.log 2>/dev/null
+    rm serial.log 2>/dev/null
 }
 
 if [ "$1" = "" ]; then

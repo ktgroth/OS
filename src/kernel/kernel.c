@@ -4,6 +4,7 @@
 #include "include/cpu/isr.h"
 #include "include/cpu/apic.h"
 #include "include/cpu/timer.h"
+#include "include/cpu/ports.h"
 #include "include/driver/fat32.h"
 #include "include/driver/storage.h"
 #include "include/driver/vga.h"
@@ -20,7 +21,22 @@
 
 apic_info_t info;
 
-extern uint64_t tick;
+static int64_t serial_ready() {
+    return inb(COM1 + 5) & 0x20;
+}
+
+static void serial_write_char(char c) {
+    while (!serial_ready());
+    outb(COM1, c);
+}
+
+static void print_serial(const char *str) {
+    while (*str) {
+        if (*str == '\n')
+            serial_write_char('\r');
+        serial_write_char(*str++);
+    }
+}
 
 int main() {
     set_cursor_pos(0, 0);
@@ -31,7 +47,7 @@ int main() {
     init_memory();
     init_page_table();
     
-    init_scheduler(5);
+    init_scheduler(0x1000);
 
     irq_install();
 
@@ -46,6 +62,9 @@ int main() {
 
     init_kalloc(HEAP_BASE, HEAP_PAGES);
     init_bpb();
+    init_serial();
+
+    print_serial("KERNEL OK\n");
 
     printf("Type something, it will go through the kernel\n"
            "Type SHUTDOWN to Shutdown CPU\n> ");
