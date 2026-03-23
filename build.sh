@@ -13,7 +13,7 @@ AOFLAGS="-f elf64"
 CFLAGS="-g -ffreestanding -target x86_64-elf"
 PCFLAGS="-target x86_64-elf -Wl,-u,-header -ffreestanding -fPIE -fno-stack-protector -mno-red-zone -nostdlib -nostartfiles -nodefaultlibs"
 LFLAGS="-Ttext $kernel_location --image-base=$kernel_location --defsym=DETECTED_MEMORY=$detected_memory --defsym=PAGE_TABLE=$page_table --defsym=BPB=0x7C00"
-PLFLAGS="-Tsrc/programs/program.ld -pie -nostdlib"
+PLFLAGS="--oformat=binary -Tsrc/programs/program.ld -pie -nostdlib"
 
 SRC=src
 BOOT=$SRC/bootloader

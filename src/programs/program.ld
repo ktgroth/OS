@@ -1,5 +1,4 @@
 
-OUTPUT_FORMAT("binary")
 ENTRY(_start)
 
 APP_BASE = 0x10000;
