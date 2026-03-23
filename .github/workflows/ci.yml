@@ -29,7 +29,7 @@ jobs:
 
       - name: Verify outputs exist
         run: |
-          test -f build/kernel.bin || test -f build/boot.bin 
+          test -f bin/kernel.bin || test -f bin/boot.bin 
           test -f build/OS
 
       - name: Boot test in QEMU
