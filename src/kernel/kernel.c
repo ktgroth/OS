@@ -47,7 +47,7 @@ int main() {
     init_memory();
     init_page_table();
     
-    init_scheduler(0x1000)
+    init_scheduler(0x1000);
 
     irq_install();
 
