@@ -7,6 +7,7 @@
 
 void init_scheduler(uint32_t quantum_ticks);
 void scheduler_enqueue(process_t *p);
+void scheduler_start_if_idle(void);
 void scheduler_on_tick(registers_t *frame);
 void scheduler_cancel_current(void);
 

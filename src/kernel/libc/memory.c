@@ -5,8 +5,6 @@
 #include "../include/libc/printf.h"
 #include "../include/driver/vga.h"
 
-#define NULL ((void *)0)
-
 #define PAGE_SIZE 0x1000
 #define MAX_PHYS_PAGES 0x20000
 #define BITMAP_SIZE (MAX_PHYS_PAGES / 8)
@@ -27,10 +25,13 @@
 #define PAGE_PWT        0x08
 #define PAGE_PCD        0x10
 #define PAGE_ACCESSED   0x20
+#define PAGE_PS         0x80
 #define PAGE_FLAGS_MASK 0xFFF
 
-#define LAPIC_PHYS 0xFEE00000ULL
-#define LAPIC_VIRT 0xFEE00000ULL
+#define LAPIC_PHYS  0xFEE00000ULL
+#define LAPIC_VIRT  0xFEE00000ULL
+#define IOAPIC_PHYS 0xFEC00000ULL
+#define IOAPIC_VIRT 0xFEC00000ULL
 
 #define KMALLOC_ALIGN   0x08
 
@@ -46,7 +47,7 @@ static uint8_t page_bitmap[BITMAP_SIZE];
 static uint64_t heap_start;
 static uint64_t heap_end;
 static uint64_t heap_current;
-static uint64_t phys_base_addr = 0x200000;
+static uint64_t phys_base_addr = 0xB06000;
 
 extern mmap_t DETECTED_MEMORY;
 
@@ -75,8 +76,6 @@ void init_memory() {
 void init_page_table() {
     page_table = PAGE_TABLE;
     memset(page_bitmap, 0, BITMAP_SIZE);
-
-    map_page((void *)LAPIC_PHYS, (void *)LAPIC_VIRT, PAGE_PRESENT | PAGE_RW | PAGE_PCD | PAGE_PWT);
 }
 
 
@@ -188,7 +187,8 @@ void map_page(void *paddr, void *vaddr, uint8_t flags) {
             .zeros      =0,
             .xd         =0
         };
-    }
+    } else
+        pml4[pml4_idx].flags |= flags;
 
     pdpt_t *pdpt = (pdpt_t *)(pml4[pml4_idx].addr << 12);
     if (!(pdpt[pdpt_idx].flags & PAGE_PRESENT)) {
@@ -199,7 +199,8 @@ void map_page(void *paddr, void *vaddr, uint8_t flags) {
             .zeros      =0,
             .xd         =0
         };
-    }
+    } else
+        pdpt[pdpt_idx].flags |= flags;
 
     pdt_t *pdt = (pdt_t *)(pdpt[pdpt_idx].addr << 12);
     if (!(pdt[pdt_idx].flags & PAGE_PRESENT)) {
@@ -210,7 +211,8 @@ void map_page(void *paddr, void *vaddr, uint8_t flags) {
             .zeros      =0,
             .xd         =0
         };
-    }
+    } else
+        pdt[pdt_idx].flags |= flags;
 
     pt_t *pt = (pt_t *)(pdt[pdt_idx].addr << 12);
     pt[pt_idx] = (pdpt_t){
@@ -219,6 +221,8 @@ void map_page(void *paddr, void *vaddr, uint8_t flags) {
             .zeros      =0,
             .xd         =0
         };
+    
+
 
     __asm__ __volatile__(
         "invlpg (%0)"
@@ -368,4 +372,3 @@ void kfree(mblock_t *src) {
     for (uint64_t max_freed = 0; max_freed < src->size; max_freed += PAGE_SIZE)
         free_physical_page(get_paddr((void *)src + max_freed));
 }
-

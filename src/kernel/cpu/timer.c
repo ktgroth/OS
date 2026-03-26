@@ -15,12 +15,20 @@
 
 extern uint64_t calc_hz(uint64_t freq, uint64_t sample_ticks);
 
+static inline uint8_t frame_from_user(const registers_t *r) {
+    return (uint8_t)((r->cs & 0x03) == 0x03);
+}
+
 extern __volatile__ uint64_t tick;
 __volatile__ uint64_t tick = 0;
 
-static void timer_callback(registers_t *regs) {
+static void timer_callback(registers_t *r) {
     ++tick;
-    scheduler_on_tick(regs);
+
+    if (!frame_from_user(r))
+        return;
+
+    scheduler_on_tick(r);
 }
 
 void init_timer(uint32_t freq) {

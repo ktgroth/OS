@@ -2,7 +2,7 @@
 #include "../include/cpu/ports.h"
 #include "../include/cpu/isr.h"
 #include "../include/driver/keyboard.h"
-#include "../include/driver/vga.h"
+#include "../include/libc/printf.h"
 #include "../include/libc/function.h"
 #include "../include/libc/string.h"
 #include "../include/libc/memory.h"
@@ -54,8 +54,8 @@ static void keyboard_callback(registers_t *regs) {
 
     if (ctrl_down && scancode == C_PRESS) {
         scheduler_cancel_current();
-        putstr("^C\n", COLOR_WHT, COLOR_BLK);
-        putstr("> ", COLOR_WHT, COLOR_BLK);
+        puts("^C\n");
+        puts("> ");
         UNUSED(regs);
         return;
     }
@@ -78,17 +78,17 @@ static void keyboard_callback(registers_t *regs) {
     if (scancode == BACKSPACE) {
         if (key_buffer[0]) {
             backspace(key_buffer);
-            putchar('\b', COLOR_WHT, COLOR_BLK);
+            putc('\b');
         }
     } else if (scancode == ENTER) {
-        putchar('\n', COLOR_WHT, COLOR_BLK);
+        putc('\n');
         user_input(key_buffer);
         key_buffer[0] = '\0';
     } else {
         char letter = sc_ascii[(int32_t)scancode];
         char str[2] = { letter, '\0' };
         append(key_buffer, letter);
-        putstr(str, COLOR_WHT, COLOR_BLK);
+        puts(str);
     }
 
     UNUSED(regs);

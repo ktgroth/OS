@@ -2,7 +2,7 @@
 
 kernel_location=0xC800
 detected_memory=0x1F000
-page_table=0x1000
+page_table=0x300000
 
 AS="nasm"
 CC="clang"
@@ -69,9 +69,10 @@ function all {
     done
 
     $AS $AOFLAGS $KERNEL/entry.s -o $OBJ/kernel/entry.o
-    $AS $AOFLAGS $KERNEL/cpu/interrupts.s -o $OBJ/kernel/interrupts.o
     $AS $AOFLAGS $KERNEL/cpu/speed.s -o $OBJ/kernel/speed.o
-    $LD $LFLAGS --oformat binary $OBJ/kernel/entry.o $OBJ/kernel/interrupts.o $OBJ/kernel/speed.o "${OBJSK[@]}" -o $BIN/kernel.bin
+    $AS $AOFLAGS $KERNEL/cpu/interrupts.s -o $OBJ/kernel/interrupts.o
+    $AS $AOFLAGS $KERNEL/user_mode/user.s -o $OBJ/kernel/user.o
+    $LD $LFLAGS --oformat binary $OBJ/kernel/entry.o $OBJ/kernel/speed.o $OBJ/kernel/interrupts.o $OBJ/kernel/user.o "${OBJSK[@]}" -o $BIN/kernel.bin
     kernel_size=$(wc -c <$BIN/kernel.bin)
     kernel_sectors=$((($kernel_size + 511) / 512))
 
@@ -120,12 +121,14 @@ function run {
     qemu-system-x86_64 \
         -enable-kvm \
         -cpu host,+apic,-x2apic \
-        -smp 8,sockets=1,cores=4,threads=2,maxcpus=8 \
+        -smp 4,sockets=1,cores=4,threads=1,maxcpus=4 \
         -hda $OUTPUT \
         -monitor stdio \
+        -debugcon file:debug.log \
+        -global isa-debugcon.iobase=0xe9 \
         -serial file:serial.log \
         -no-reboot \
-        -d in_asm,cpu_reset \
+        -d int,in_asm,cpu_reset \
         -D qemu.log \
         -m 16G
 }
@@ -135,12 +138,14 @@ function debug {
     qemu-system-x86_64 \
         -enable-kvm \
         -cpu host,+apic,-x2apic \
-        -smp 8,sockets=1,cores=4,threads=2,maxcpus=8 \
+        -smp 4,sockets=1,cores=4,threads=1,maxcpus=4 \
         -hda $OUTPUT \
         -monitor stdio \
+        -debugcon file:debug.log \
+        -global isa-debugcon.iobase=0xe9 \
         -serial file:serial.log \
         -no-reboot \
-        -d in_asm,cpu_reset \
+        -d int,in_asm,cpu_reset \
         -D qemu.log \
         -m 16G
 }
@@ -166,6 +171,7 @@ function clean {
     rm -rf $BUILD
     rm qemu.log 2>/dev/null
     rm serial.log 2>/dev/null
+    rm debug.log 2>/dev/null
 }
 
 if [ "$1" = "" ]; then

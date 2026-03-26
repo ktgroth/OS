@@ -25,11 +25,12 @@ void outw(uint16_t port, uint16_t data) {
 
 void io_wait(void) {
     volatile uint8_t *io_flag = (volatile uint8_t *)IO_FLAG_ADDR;
-
-    while (*io_flag == 0)
-        __asm__("hlt");
-
+    while (*io_flag == 0);
     *io_flag = 0;
+}
+
+static uint8_t serial_tx_ready(void) {
+    return inb(COM1 + 5) & 0x20;
 }
 
 void init_serial(void) {
@@ -40,5 +41,21 @@ void init_serial(void) {
     outb(COM1 + 3, 0x03);
     outb(COM1 + 2, 0xC7);
     outb(COM1 + 4, 0x0B);
+}
+
+void serial_putc(char c) {
+    while (!serial_tx_ready());
+    outb(COM1, (uint8_t)c);
+}
+
+void serial_puts(const char *s) {
+    if (!s)
+        return;
+
+    while (*s) {
+        if (*s == '\n')
+            serial_putc('\r');
+        serial_putc(*s++);
+    }
 }
 

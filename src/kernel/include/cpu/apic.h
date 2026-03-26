@@ -7,7 +7,7 @@
 
 typedef struct {
     uint8_t acpi_cpu_id;
-    uint8_t apic_id;
+    uint32_t apic_id;
     uint32_t flags;
 } apic_cpu_t;
 
@@ -22,6 +22,7 @@ void apic_enable_lapic(void);
 void apic_eoi(void);
 void ioapic_route_irq0_to_vector32(void);
 void ioapic_route_irq1_to_vector33(void);
+void ioapic_route_irq12_to_vector44(void);
 
 uint64_t apic_discover(apic_info_t *out);
 uint64_t apic_get_lapic_phys_addr(void);

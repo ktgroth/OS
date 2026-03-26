@@ -38,7 +38,6 @@ static uint8_t enqueue_nolock(process_t *p) {
     g_q_count++;
     p->in_run_queue = 1;
 
-    // printf("ENQUEUE:\n HEAD: %lu\n TAIL: %lu\n", g_q_head, g_q_tail);
     return 1;
 }
 
@@ -52,7 +51,6 @@ static process_t *dequeue_nolock(void) {
     if (p)
         p->in_run_queue = 0;
 
-    // printf("DEQUEUE:\n HEAD: %lu\n TAIL: %lu\n", g_q_head, g_q_tail);
     return p;
 }
 
@@ -112,6 +110,8 @@ void scheduler_cancel_current(void) {
     g_force_resched = 1;
 }
 
+extern void enter_user(uint64_t rip, uint64_t rsp);
+
 static void dispatch(process_t *next, registers_t *frame) {
     if (!next || !frame)
         return;
@@ -121,11 +121,36 @@ static void dispatch(process_t *next, registers_t *frame) {
     *frame = next->regs;
     g_ticks_in_slice = 0;
     g_force_resched = 0;
-    return;
+    
+    enter_user(frame->rip, frame->rsp);
+}
+
+void scheduler_start_if_idle(void) {
+    uint64_t flags = irq_save_disable();
+    if (current_process() || g_q_count == 0) {
+        irq_restore(flags);
+        return;
+    }
+
+    process_t *next = next_runnable_nolock();
+    if (!next) {
+        irq_restore(flags);
+        return;
+    }
+
+    next->state = PROC_RUNNING;
+    set_current_process(next);
+    registers_t r = next->regs;
+    irq_restore(flags);
+    printf("IDLE\n");
+    enter_user(r.rip, r.rsp);
 }
 
 void scheduler_on_tick(registers_t *frame) {
     if (!frame)
+        return;
+
+    if ((frame->cs & 0x03) != 0x03)
         return;
 
     process_t *curr = current_process();

@@ -74,6 +74,7 @@ static void dispatch(int argc, char **argv) {
 }
 
 void user_input(char *input) {
+    printf("INPUT: %s\n", input);
     char *argv[MAX_ARGS];
     int argc = tokenize(input, argv, MAX_ARGS);
     dispatch(argc, argv);
@@ -296,7 +297,6 @@ static void cmd_run(int argc, char **argv) {
             return;
         }
 
-        uint8_t *payload = file_base + sizeof(app_header_t);
         if (hdr->image_size != (uint64_t)(ent.bytes - sizeof(app_header_t))) {
             printf("Expected: %lu\nRead: %lu\n", ent.bytes - sizeof(app_header_t), hdr->image_size);
             putstr("RUN: size mismatch\n> ", COLOR_WHT, COLOR_BLK);
@@ -306,14 +306,21 @@ static void cmd_run(int argc, char **argv) {
             return;
         }
 
-        app_entry_t entry = (app_entry_t)(payload + hdr->entry_off);
-        process_t *p = create_process(entry, argv[i]);
+        uint8_t *payload = file_base + sizeof(app_header_t);
+        process_t *p = create_user_process_from_image(
+            payload,
+            hdr->image_size,
+            hdr->entry_off,
+            argv[i]
+        );
+
         if (!p) {
-            printf("RUN: process table full: %s\n", argv[i]);
+            printf("RUN: create process failed: %s\n", argv[i]);
             continue;
         }
         
         scheduler_enqueue(p);
+        scheduler_start_if_idle();
         printf("RUN: queued pid=%lu %s\n", p->pid, argv[i]);
         queued++;
     }

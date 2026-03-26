@@ -6,6 +6,7 @@
 #include "../include/cpu/apic.h"
 #include "../include/driver/vga.h"
 #include "../include/driver/keyboard.h"
+#include "../include/driver/mouse.h"
 #include "../include/libc/string.h"
 #include "../include/libc/printf.h"
 
@@ -127,7 +128,7 @@ void isr_install(void) {
     set_idt_gate(29, (uint64_t)isr29);
     set_idt_gate(30, (uint64_t)isr30);
     set_idt_gate(31, (uint64_t)isr31);
-    set_idt_gate_with_flags(128, (uint64_t)isr128, 0x8E);
+    set_idt_gate_with_flags(128, (uint64_t)isr128, 0xEE);
 
     set_idt_gate(32, (uint64_t)irq0);
     set_idt_gate(33, (uint64_t)irq1);
@@ -157,9 +158,11 @@ void irq_install() {
     apic_enable_lapic();
     ioapic_route_irq0_to_vector32();
     ioapic_route_irq1_to_vector33();
+    ioapic_route_irq12_to_vector44();
 
     init_timer(PIT_HZ);
     init_keyboard();
+    init_mouse();
     __asm__ __volatile__("sti");
 }
 
@@ -181,8 +184,11 @@ void isr_handler(registers_t *r) {
 
     if (r->irq_number < 32) {
         putstr("Exception: ", COLOR_WHT, COLOR_RED);
+        serial_puts("Exception: ");
         putstr(exception_messages[r->irq_number], COLOR_WHT, COLOR_RED);
+        serial_puts(exception_messages[r->irq_number]);
         putstr("\n", COLOR_WHT, COLOR_RED);
+        serial_puts("\n");
         
         if (r->irq_number == 14) {
             uint64_t cr2 = read_cr2();
@@ -192,9 +198,11 @@ void isr_handler(registers_t *r) {
         char ins[66] = "";
         hex_to_ascii(r->rip, ins);
         putstr("At RIP=", COLOR_WHT, COLOR_RED);
+        serial_puts("At RIP=");
         putstr(ins, COLOR_WHT, COLOR_RED);
+        serial_puts(ins);
         putstr("\n", COLOR_WHT, COLOR_RED);
-
+        serial_puts("\n");
 
         for (;;)
             __asm__ __volatile__("hlt");

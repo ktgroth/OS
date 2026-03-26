@@ -14,7 +14,11 @@ typedef unsigned int    uint32_t;
 typedef signed long     int64_t;
 typedef unsigned long   uint64_t;
 
-typedef int bool;
+typedef int8_t          bool;
+
+typedef float           float32_t;
+typedef double          float64_t;
+
 
 #define low_16(address) (uint16_t)((address) & 0xFFFF)
 #define high_16(address) (uint16_t)(((address) >> 16) & 0xFFFF)

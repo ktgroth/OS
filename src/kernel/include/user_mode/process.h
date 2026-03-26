@@ -35,8 +35,7 @@ typedef struct process {
 } process_t;
 
 
-process_t *create_new_process(void);
-process_t *create_process(app_entry_t entry, const char *name);
+process_t *create_user_process_from_image(const uint8_t *image, uint64_t image_size, uint64_t entry_off, const char *name);
 void destroy_process(process_t *proc);
 
 process_t *current_process(void);

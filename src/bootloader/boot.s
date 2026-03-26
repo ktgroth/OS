@@ -34,8 +34,11 @@ FS_TYPE:                db 'FAT32   '
 
 PAGE_LEVEL_4            equ PAGE_TABLE
 PAGE_LEVEL_3            equ PAGE_LEVEL_4 + 0x1000
-PAGE_LEVEL_2            equ PAGE_LEVEL_3 + 0x1000
-FIRST_PAGE_TABLE        equ PAGE_LEVEL_2 + 0x1000
+PAGE_LEVEL_2_0          equ PAGE_LEVEL_3 + 0x1000
+PAGE_LEVEL_2_1          equ PAGE_LEVEL_2_0 + 0x1000
+PAGE_LEVEL_2_2          equ PAGE_LEVEL_2_1 + 0x1000
+PAGE_LEVEL_2_3          equ PAGE_LEVEL_2_2 + 0x1000
+PAGE_LEVEL_1_BASE       equ PAGE_LEVEL_2_3 + 0x1000
 E820_BUFFER             equ DETECTED_MEMORY
 E820_ENTRY_SIZE         equ 0x18
 MAX_ENTRIES             equ 0xC8
@@ -55,6 +58,7 @@ begin_real:
     call load_bios
 
     call detect_mem
+    call init_vbe
     call elevate_bios
     jmp $
 
@@ -62,6 +66,7 @@ begin_real:
 %include "src/bootloader/real_mode/gdt.s"
 %include "src/bootloader/real_mode/elevate.s"
 %include "src/bootloader/real_mode/mem.s"
+%include "src/bootloader/real_mode/vbe.s"
 
 boot_drive:
     db 0x00
@@ -205,6 +210,16 @@ begin_long_mode:
     call ata_read
 
 .done_read:
+    mov rax, cr0
+    and rax, ~(1 << 2)
+    or rax, (1 << 1)
+    mov cr0, rax
+
+    mov rax, cr4
+    or rax, (1 << 9) | (1 << 10)
+    mov cr4, rax
+    fninit
+
     call KERNEL_LOCATION
     jmp $
 

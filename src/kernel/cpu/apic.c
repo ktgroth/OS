@@ -170,16 +170,32 @@ static uint8_t acpi_checksum8(const void *ptr, uint64_t len) {
     return sum;
 }
 
-static void map_phys_range_identity(uint64_t base, uint64_t len) {
-    uint64_t start = base & ~0xFFFULL;
-    uint64_t end = (base + len + 0xFFFULL) & ~0xFFFULL;
-
-    for (uint64_t p = start; p < end; p += 0x1000)
-        map_page((void *)p, (void *)p, PAGE_PRESENT | PAGE_RW | PAGE_PCD);
+static uint64_t idmap_range_ok(uint64_t base, uint64_t len) {
+    if (!len)
+        return 0;
+    if (base >= IDMAP_LIMIT)
+        return 0;
+    if (len > ACPI_MAX_TABLE_LEN)
+        return 0;
+    
+    uint64_t end = base + len;
+    if (end < base)
+        return 0;
+    
+    return end <= IDMAP_LIMIT;
 }
 
 static rsdp_t *scan_rsdp_range(uint64_t start, uint64_t end) {
+    if (end > IDMAP_LIMIT)
+        end = IDMAP_LIMIT;
+
+    if (start >= end)
+        return NULL;
+
     for (uint64_t p = start; p + sizeof(rsdp_t) <= end; p += 16) {
+        if (!idmap_range_ok(p, sizeof(rsdp_t)))
+            break;
+
         rsdp_t *r = (rsdp_t *)p;
         if (!memeq(r->signature, SIG_RSDP, 8))
             continue;
@@ -217,11 +233,16 @@ static uint64_t sdt_valid(acpi_sdt_header_t *h) {
     if (!h)
         return 0;
 
-    map_phys_range_identity((uint64_t)h, sizeof(acpi_sdt_header_t));
+    uint64_t addr = (uint64_t)h;
+    if (!idmap_range_ok(addr, sizeof(acpi_sdt_header_t)))
+        return 0;
+
     if (h->length < sizeof(acpi_sdt_header_t))
         return 0;
 
-    map_phys_range_identity((uint64_t)h, h->length);
+    if (!idmap_range_ok(addr, h->length))
+        return 0;
+
     return acpi_checksum8(h, h->length) == 0;
 }
 
@@ -230,7 +251,11 @@ static acpi_sdt_header_t *find_table_in_rsdt(acpi_sdt_header_t *rsdt, const char
     uint32_t *entries = (uint32_t *)((uint8_t *)rsdt + sizeof(acpi_sdt_header_t));
 
     for (uint32_t i = 0; i < n; ++i) {
-        acpi_sdt_header_t *h = (acpi_sdt_header_t *)(uint64_t)entries[i];
+        uint64_t entry = (uint64_t)entries[i];
+        if (!idmap_range_ok(entry, sizeof(acpi_sdt_header_t)))
+            continue;
+
+        acpi_sdt_header_t *h = (acpi_sdt_header_t *)entry;
         if (!sdt_valid(h))
             continue;
 
@@ -246,7 +271,11 @@ static acpi_sdt_header_t *find_table_in_xsdt(acpi_sdt_header_t *xsdt, const char
     uint64_t *entries = (uint64_t *)((uint8_t *)xsdt + sizeof(acpi_sdt_header_t));
 
     for (uint32_t i = 0; i < n; ++i) {
-        acpi_sdt_header_t *h = (acpi_sdt_header_t *)(uint64_t)entries[i];
+        uint64_t entry = (uint64_t)entries[i];
+        if (!idmap_range_ok(entry, sizeof(acpi_sdt_header_t)))
+            continue;
+
+        acpi_sdt_header_t *h = (acpi_sdt_header_t *)entry;
         if (!sdt_valid(h))
             continue;
 
@@ -262,12 +291,18 @@ static madt_t *find_madt(rsdp_t *rsdp) {
         return NULL;
 
     if (rsdp->revision >= 2 && rsdp->xsdt_address) {
+        if (!idmap_range_ok(rsdp->xsdt_address, sizeof(acpi_sdt_header_t)))
+            return NULL;
+
         acpi_sdt_header_t *xsdt = (acpi_sdt_header_t *)(uint64_t)rsdp->xsdt_address;
         if (sdt_valid(xsdt) && memeq(xsdt->signature, SIG_XSDT, 4))
             return (madt_t *)find_table_in_xsdt(xsdt, SIG_MADT);
     }
 
     if (rsdp->rsdt_address) {
+        if (!idmap_range_ok((uint64_t)rsdp->rsdt_address, sizeof(acpi_sdt_header_t)))
+            return NULL;
+
         acpi_sdt_header_t *rsdt = (acpi_sdt_header_t *)(uint64_t)rsdp->rsdt_address;
         if (sdt_valid(rsdt) && memeq(rsdt->signature, SIG_RSDT, 4))
             return (madt_t *)find_table_in_rsdt(rsdt, SIG_MADT);
@@ -301,12 +336,12 @@ static void parse_madt(madt_t *madt, apic_info_t *out) {
                 out->cpu_count++;
             }
 
-            // printf("MADT LOCAL APIC\n");
+            printf("MADT LOCAL APIC\n");
         } else if (eh->type == MADT_TYPE_LOCAL_APIC_ADDR_OVERRIDE &&
                    eh->length >= sizeof(madt_lapic_addr_override_t)) {
             madt_lapic_addr_override_t *e = (madt_lapic_addr_override_t *)p;
             out->lapic_phys_addr = e->lapic_phys_addr;
-            // printf("MADT LOCAL APIC ADDR OVERRIDE\n");
+            printf("MADT LOCAL APIC ADDR OVERRIDE\n");
         } else if (eh->type == MADT_TYPE_LOCAL_X2APIC &&
                    eh->length >= sizeof(madt_local_x2apic_t)) {
             madt_local_x2apic_t *e = (madt_local_x2apic_t *)p;
@@ -318,7 +353,7 @@ static void parse_madt(madt_t *madt, apic_info_t *out) {
                 out->cpu_count++;
             }
             
-            // printf("MADT LOCAL X2APIC\n");
+            printf("MADT LOCAL X2APIC\n");
         }
         
         p += eh->length;
@@ -333,9 +368,6 @@ void apic_enable_lapic(void) {
     uint64_t lapic_base = v & IA32_APIC_BASE_MASK;
     if (!lapic_base)
         lapic_base = apic_get_lapic_phys_addr();
-
-    map_phys_range_identity(lapic_base, 0x1000);
-    map_phys_range_identity(IOAPIC_PHYS, 0x1000);
 
     lapic_write(lapic_base, LAPIC_SVR_REG, 0x100 | 0xFF);
 }
@@ -370,6 +402,10 @@ static void ioapic_route_isa_irq(uint8_t irq, uint8_t vector) {
     ioapic_write(IOAPIC_PHYS, lo_reg, low);
 }
 
+void ioapic_route_irq12_to_vector44(void) {
+    ioapic_route_isa_irq(12, 44);
+}
+
 void ioapic_route_irq0_to_vector32(void) {
     ioapic_route_isa_irq(0, 32);
     ioapic_route_isa_irq(2, 32);
@@ -396,6 +432,7 @@ uint64_t apic_discover(apic_info_t *out) {
     madt_t *madt = find_madt(rsdp);
     if (!madt || !sdt_valid(&madt->h)) {
         out->lapic_phys_addr = apic_base_from_msr();
+        out->cpu_count = 1;
         g_apic_info = *out;
         return out->lapic_phys_addr != 0;
     }
@@ -421,4 +458,3 @@ void apic_dump_info(const apic_info_t *info) {
 
     printf("APIC: LAPIC phys base = %x, CPUs = %d\n", info->lapic_phys_addr, info->cpu_count);
 }
-

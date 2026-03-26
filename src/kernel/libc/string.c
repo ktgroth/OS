@@ -22,7 +22,7 @@ void int_to_ascii(int64_t n, char str[]) {
     reverse(str);
 }
 
-uint64_t ascii_to_int(char str[]) {
+uint64_t ascii_to_int(const char str[]) {
     uint64_t n = 0;
     uint64_t power = 1;
 
@@ -73,7 +73,7 @@ void reverse(char s[]) {
     }
 }
 
-uint64_t strlen(char s[]) {
+uint64_t strlen(const char s[]) {
     if (!s)
         return 0;
 
@@ -93,7 +93,7 @@ void backspace(char s[]) {
     s[len - 1] = '\0';
 }
 
-uint64_t strcmp(char s1[], char s2[]) {
+uint64_t strcmp(const char s1[], const char s2[]) {
     uint64_t i;
     for (i = 0; s1[i] == s2[i]; ++i)
         if (s1[i] == '\0')
@@ -102,7 +102,7 @@ uint64_t strcmp(char s1[], char s2[]) {
     return s1[i] - s2[i];
 }
 
-uint64_t strncmp(char s1[], char s2[], uint64_t n) {
+uint64_t strncmp(const char s1[], const char s2[], uint64_t n) {
     while (n > 0 && *s1 != '\0' && *s1 == *s2) {
         ++s1;
         ++s2;
@@ -115,7 +115,7 @@ uint64_t strncmp(char s1[], char s2[], uint64_t n) {
         return *s1 - *s2;
 }
 
-char *strcpy(char s1[], char s2[]) {
+char *strcpy(char s1[], const char s2[]) {
     uint64_t i;
     for (i = 0; s2[i]; ++i)
         s1[i] = s2[i];
@@ -124,7 +124,7 @@ char *strcpy(char s1[], char s2[]) {
     return s1;
 }
 
-char *strncpy(char s1[], char s2[], uint64_t n) {
+char *strncpy(char s1[], const char s2[], uint64_t n) {
     if (!n)
         return s1;
 
