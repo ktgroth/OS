@@ -100,9 +100,9 @@ function clean {
     clear
 
     rm -rf $OBJ $BIN $BUILD
-    rm qemu.log 2>/dev/null
-    rm serial.log 2>/dev/null
-    rm debug.log 2>/dev/null
+    rm -rf qemu.log 2>/dev/null
+    rm -rf serial.log 2>/dev/null
+    rm -rf debug.log 2>/dev/null
 }
 
 case "${1:-build}" in
