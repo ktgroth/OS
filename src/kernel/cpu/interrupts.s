@@ -1,6 +1,7 @@
 
-[extern isr_handler]
-[extern irq_handler]
+extern isr_handler
+extern irq_handler
+extern dbg_pre_iret
 
 REGISTER_SIZE equ 0x78
 QUADWORD_SIZE equ 0x08
@@ -48,6 +49,7 @@ QUADWORD_SIZE equ 0x08
     POPALL
 %endmacro
 
+
 %macro ISR_NOERRCODE 1
 global isr%1
 isr%1:
@@ -56,6 +58,8 @@ isr%1:
     SAVE_REGS_AND_CALL_HANDLER isr_handler
 
     add rsp, 0x10
+    mov rdi, rsp
+    call dbg_pre_iret
     iretq
 %endmacro
 
@@ -66,6 +70,8 @@ isr%1:
     SAVE_REGS_AND_CALL_HANDLER isr_handler
 
     add rsp, 0x10
+    mov rdi, rsp
+    call dbg_pre_iret
     iretq
 %endmacro
 
@@ -132,3 +138,4 @@ IRQ_CODE 12, 44
 IRQ_CODE 13, 45
 IRQ_CODE 14, 46
 IRQ_CODE 15, 47
+

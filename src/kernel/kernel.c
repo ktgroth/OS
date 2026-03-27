@@ -13,6 +13,7 @@
 #include "include/driver/syscall.h"
 #include "include/driver/clock.h"
 #include "include/driver/framebuffer.h"
+#include "include/driver/keyboard.h"
 #include "include/driver/mouse.h"
 #include "include/driver/gui.h"
 #include "include/libc/memory.h"
@@ -27,7 +28,7 @@
 
 apic_info_t info;
 extern uint8_t fb_ready;
-static uint8_t g_kernel_boot_stack[KSTACK_SIZE];
+static uint8_t g_kernel_boot_stack[KSTACK_SIZE] __attribute__((aligned(16)));
 
 int main() {
     gdt_runtime_load();
@@ -76,9 +77,14 @@ int main() {
     init_scheduler(0x1000);
     printf("INIT_SCHEDULER OK\n");
 
+    printf("> ");
+    for (;;) {
+        char line[256];
+        if (keyboard_try_get_line(line, sizeof(line)))
+            user_input(line);
 
-    printf("\nType something, it will go through the kernel\n"
-           "Type SHUTDOWN to Shutdown CPU\n> ");
+        __asm__ __volatile__("hlt");
+    }
 
     return 0;
 }

@@ -7,7 +7,6 @@
 
 #define MAX_PROCESSES       64
 #define PROCESS_NAME_LEN    32
-#define PROCESS_STACK_SIZE  0x4000
 
 typedef uint64_t (*app_entry_t)(void);
 
@@ -32,10 +31,16 @@ typedef struct process {
     uint64_t exit_code;
     uint8_t cancel_requested;
     uint8_t in_run_queue;
+
+    uint64_t user_image_base;
+    uint64_t user_stack_top;
 } process_t;
 
 
-process_t *create_user_process_from_image(const uint8_t *image, uint64_t image_size, uint64_t entry_off, const char *name);
+process_t *create_user_process_from_image(const uint8_t *image,
+                                          uint64_t image_size,
+                                          uint64_t entry_off,
+                                          const char *name);
 void destroy_process(process_t *proc);
 
 process_t *current_process(void);

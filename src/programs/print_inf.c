@@ -3,6 +3,7 @@
 #include "include/syscalls/write.h"
 #include "include/syscalls/exit.h"
 
+__attribute__((section(".text.entry")))
 uint64_t _start(void) {
     static const char msg[] = "INF PRINT PROGRAM\n";
     while (1) {

@@ -1,10 +1,8 @@
 
 #include "../include/cpu/isr.h"
 #include "../include/driver/syscall.h"
-#include "../include/driver/vga.h"
 #include "../include/libc/types.h"
 #include "../include/libc/printf.h"
-#include "../include/libc/string.h"
 #include "../include/user_mode/process.h"
 #include "../include/user_mode/scheduler.h"
 
@@ -14,6 +12,37 @@
 #include "../include/driver/syscalls/fork.h"
 #include "../include/driver/syscalls/write.h"
 
+
+#define IA32_EFER   0xC0000080
+#define IA32_STAR   0xC0000081
+#define IA32_LSTAR  0xC0000082
+#define IA32_FMASK  0xC0000084
+
+#define KERNEL_CS   0x08
+#define USER_CS     0x1B
+
+extern void syscall_entry(void);
+
+typedef struct __attribute__((packed)) {
+    uint64_t rdx;
+    uint64_t rsi;
+    uint64_t rdi;
+    uint64_t rax;
+    uint64_t rcx;
+    uint64_t r11;
+} syscall_frame_t;
+
+static inline uint64_t rdmsr(uint32_t msr) {
+    uint32_t lo, hi;
+    __asm__ __volatile__("rdmsr" : "=a"(lo), "=d"(hi) : "c"(msr));
+    return ((uint64_t)hi << 32) | lo;
+}
+
+static inline void wrmsr(uint32_t msr, uint64_t v) {
+    uint32_t lo = (uint32_t)v;
+    uint32_t hi = (uint32_t)(v >> 32);
+    __asm__ __volatile__("wrmsr" : : "c"(msr), "a"(lo), "d"(hi));
+}
 
 enum {
     SYS_WRITE   = 0x01,
@@ -26,10 +55,10 @@ enum {
     SYS_WAIT4   = 61,
 };
 
-static void syscall_dispatch(registers_t *r) {
-    switch (r->rax) {
+uint64_t syscall_dispatch(syscall_frame_t *f) {
+    switch (f->rax) {
         case SYS_WRITE:
-            r->rax = sys_write(r->rdi, (const char *)r->rsi, r->rdx);
+            f->rax = sys_write(f->rdi, (const char *)f->rsi, f->rdx);
             break;
 
         // case SYS_MMAP: {
@@ -43,20 +72,19 @@ static void syscall_dispatch(registers_t *r) {
         // }
 
         case SYS_BRK:
-            r->rax = sys_brk(r->rdi);
+            f->rax = sys_brk(f->rdi);
             break;
 
         case SYS_FORK:
-            r->rax = sys_fork();
+            f->rax = sys_fork();
             break;
 
         case SYS_EXECVE:
-            r->rax = sys_execve((const char *)r->rdi, (char *const *)r->rsi, (const char *const *)r->rdx);
+            f->rax = sys_execve((const char *)f->rdi, (char *const *)f->rsi, (const char *const *)f->rdx);
             break;
 
         case SYS_EXIT:
-            r->rax = sys_exit(r->rdi);
-            scheduler_on_tick(r);
+            f->rax = sys_exit(f->rdi);
             break;
 
         // case SYS_WAIT4: {
@@ -65,14 +93,23 @@ static void syscall_dispatch(registers_t *r) {
         // }
 
         default:
-            printf("Unknown syscall '%d'\n", r->rax);
+            printf("Unknown syscall '%d'\n", f->rax);
             break;
     }
     
-    return;
+    return -1;
 }
 
 void init_syscalls(void) {
-    register_interrupt_handler(128, syscall_dispatch);
+    uint64_t efer = rdmsr(IA32_EFER);
+    wrmsr(IA32_EFER, efer | 1ULL);
+
+    uint64_t star =
+        (((uint64_t)(USER_CS - 16)) << 48) |
+        (((uint64_t)KERNEL_CS) << 32);
+
+    wrmsr(IA32_STAR, star);
+    wrmsr(IA32_LSTAR, (uint64_t)syscall_entry);
+    wrmsr(IA32_FMASK, (1ULL << 9));
 }
 

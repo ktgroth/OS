@@ -32,6 +32,8 @@ typedef struct __attribute__((packed)) {
     uint32_t reserved;
 } tss_desc_t;
 
+extern uint64_t g_kernel_rsp0;
+
 void tss_init(uint64_t rsp0);
 void tss_install(void *gdt_base, uint16_t tss_selector);
 

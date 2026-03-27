@@ -265,7 +265,7 @@ uint64_t kvprintf(const char *fmt, va_list ap) {
 
             default: {
                 putc('%');
-                putchar(spec, COLOR_WHT, COLOR_BLK);
+                putc(spec);
                 written += 2;
             } break;
         }

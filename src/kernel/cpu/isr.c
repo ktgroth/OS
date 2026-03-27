@@ -13,7 +13,7 @@
 isr_t interrupt_handlers[IDT_ENTRIES];
 
 char *exception_messages[] = {
-    "Divison By Zero",
+    "Division By Zero",
     "Debug",
     "Non Maskable Interrupt",
     "Breakpoint",
@@ -183,26 +183,15 @@ void isr_handler(registers_t *r) {
     }
 
     if (r->irq_number < 32) {
-        putstr("Exception: ", COLOR_WHT, COLOR_RED);
-        serial_puts("Exception: ");
-        putstr(exception_messages[r->irq_number], COLOR_WHT, COLOR_RED);
-        serial_puts(exception_messages[r->irq_number]);
-        putstr("\n", COLOR_WHT, COLOR_RED);
-        serial_puts("\n");
-        
+        printf("Exception: %s\n", exception_messages[r->irq_number]);
         if (r->irq_number == 14) {
             uint64_t cr2 = read_cr2();
             printf("PF: cr2=%lx err=%lx\n", cr2, r->error_code);
         }
 
-        char ins[66] = "";
-        hex_to_ascii(r->rip, ins);
-        putstr("At RIP=", COLOR_WHT, COLOR_RED);
-        serial_puts("At RIP=");
-        putstr(ins, COLOR_WHT, COLOR_RED);
-        serial_puts(ins);
-        putstr("\n", COLOR_WHT, COLOR_RED);
-        serial_puts("\n");
+        printf("ISR=%lu CS=%lx RFL=%lx RSP=%lx SS=%lx\n",
+                r->irq_number, r->cs, r->eflags, r->rsp, r->ss);
+        printf("At RIP=%lx\n", r->rip);
 
         for (;;)
             __asm__ __volatile__("hlt");
@@ -224,3 +213,8 @@ void irq_handler(registers_t *r) {
         handler(r);
     }
 }
+
+void dbg_pre_iret(uint64_t *sp) {
+    printf("PRE-IRET rip=%lx cs=%lx rfl=%lx\n", sp[0], sp[1], sp[2]);
+}
+

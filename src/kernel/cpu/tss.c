@@ -2,13 +2,15 @@
 #include "../include/cpu/tss.h"
 #include "../include/libc/stdlib.h"
 
-extern uint8_t g_kernel_stack_top[];
 static tss64_t g_tss;
+uint64_t g_kernel_rsp0 = 0;
 
 void tss_init(uint64_t rsp0) {
     memset((uint8_t *)&g_tss, 0, sizeof(g_tss));
     g_tss.rsp0 = rsp0;
     g_tss.iopb_offset = sizeof(tss64_t);
+
+    g_kernel_rsp0 = rsp0;
 }
 
 void tss_install(void *gdt_base, uint16_t tss_selector) {

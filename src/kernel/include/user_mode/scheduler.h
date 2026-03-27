@@ -11,5 +11,7 @@ void scheduler_start_if_idle(void);
 void scheduler_on_tick(registers_t *frame);
 void scheduler_cancel_current(void);
 
+void scheduler_capture_kernel_frame(registers_t *frame);
+
 #endif
 

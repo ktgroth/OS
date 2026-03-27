@@ -297,6 +297,7 @@ static void cmd_run(int argc, char **argv) {
             return;
         }
 
+        uint8_t *payload = file_base + sizeof(app_header_t);
         if (hdr->image_size != (uint64_t)(ent.bytes - sizeof(app_header_t))) {
             printf("Expected: %lu\nRead: %lu\n", ent.bytes - sizeof(app_header_t), hdr->image_size);
             putstr("RUN: size mismatch\n> ", COLOR_WHT, COLOR_BLK);
@@ -306,7 +307,6 @@ static void cmd_run(int argc, char **argv) {
             return;
         }
 
-        uint8_t *payload = file_base + sizeof(app_header_t);
         process_t *p = create_user_process_from_image(
             payload,
             hdr->image_size,
@@ -320,11 +320,12 @@ static void cmd_run(int argc, char **argv) {
         }
         
         scheduler_enqueue(p);
-        scheduler_start_if_idle();
         printf("RUN: queued pid=%lu %s\n", p->pid, argv[i]);
+        printf("rip=%lx rsp=%lx\n", p->regs.rip, p->regs.rsp);
         queued++;
     }
 
     printf("RUN: queued %lu process(es)\n> ", queued);
+    scheduler_start_if_idle();
 }
 

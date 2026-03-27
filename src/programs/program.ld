@@ -19,6 +19,10 @@ SECTIONS
 
     . = APP_PAYLOAD_BASE;
 
+    .text.entry : ALIGN(16) {
+        KEEP(*(.text.entry))
+    }
+
     .text : ALIGN(16) {
         *(.text*)
     }

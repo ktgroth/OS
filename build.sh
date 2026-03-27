@@ -10,7 +10,7 @@ LD="ld.lld"
 
 ABFLAGS="-f bin"
 AOFLAGS="-f elf64"
-CFLAGS="-g -ffreestanding -target x86_64-elf"
+CFLAGS="-g -ffreestanding -target x86_64-elf -mno-red-zone -fno-omit-frame-pointer"
 PCFLAGS="-target x86_64-elf -Wl,-u,-header -ffreestanding -fPIE -fno-stack-protector -mno-red-zone -nostdlib -nostartfiles -nodefaultlibs"
 LFLAGS="-Ttext $kernel_location --image-base=$kernel_location --defsym=DETECTED_MEMORY=$detected_memory --defsym=PAGE_TABLE=$page_table --defsym=BPB=0x7C00"
 PLFLAGS="--oformat=binary -Tsrc/programs/program.ld -pie -nostdlib"
@@ -71,8 +71,17 @@ function all {
     $AS $AOFLAGS $KERNEL/entry.s -o $OBJ/kernel/entry.o
     $AS $AOFLAGS $KERNEL/cpu/speed.s -o $OBJ/kernel/speed.o
     $AS $AOFLAGS $KERNEL/cpu/interrupts.s -o $OBJ/kernel/interrupts.o
+    $AS $AOFLAGS $KERNEL/driver/syscall.s -o $OBJ/kernel/syscall.s.o
     $AS $AOFLAGS $KERNEL/user_mode/user.s -o $OBJ/kernel/user.o
-    $LD $LFLAGS --oformat binary $OBJ/kernel/entry.o $OBJ/kernel/speed.o $OBJ/kernel/interrupts.o $OBJ/kernel/user.o "${OBJSK[@]}" -o $BIN/kernel.bin
+    $LD $LFLAGS --oformat binary \
+        $OBJ/kernel/entry.o \
+        $OBJ/kernel/speed.o \
+        $OBJ/kernel/interrupts.o \
+        $OBJ/kernel/syscall.s.o \
+        $OBJ/kernel/user.o \
+        "${OBJSK[@]}" \
+        -o $BIN/kernel.bin
+
     kernel_size=$(wc -c <$BIN/kernel.bin)
     kernel_sectors=$((($kernel_size + 511) / 512))
 
@@ -121,7 +130,7 @@ function run {
     qemu-system-x86_64 \
         -enable-kvm \
         -cpu host,+apic,-x2apic \
-        -smp 4,sockets=1,cores=4,threads=1,maxcpus=4 \
+        -smp 1,sockets=1,cores=1,threads=1,maxcpus=1 \
         -hda $OUTPUT \
         -monitor stdio \
         -debugcon file:debug.log \
@@ -138,7 +147,7 @@ function debug {
     qemu-system-x86_64 \
         -enable-kvm \
         -cpu host,+apic,-x2apic \
-        -smp 4,sockets=1,cores=4,threads=1,maxcpus=4 \
+        -smp 1,sockets=1,cores=1,threads=1,maxcpus=1 \
         -hda $OUTPUT \
         -monitor stdio \
         -debugcon file:debug.log \

@@ -3,6 +3,7 @@
 #include "include/syscalls/write.h"
 #include "include/syscalls/exit.h"
 
+__attribute__((section(".text.entry")))
 uint64_t _start(void) {
     for (uint64_t i = 0; i < 0x10000000; ++i);
     static const char msg[] = "HELLO WORLD\n";

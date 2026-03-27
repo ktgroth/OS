@@ -2,10 +2,10 @@
 #include "../include/cpu/ports.h"
 #include "../include/driver/fat32.h"
 #include "../include/driver/storage.h"
-#include "../include/driver/vga.h"
 #include "../include/libc/string.h"
 #include "../include/libc/memory.h"
 #include "../include/libc/stdlib.h"
+#include "../include/libc/printf.h"
 
 
 #define ATAIO_DATA              0x01F0
@@ -46,6 +46,10 @@ static uint32_t data_start_lba;
 static uint32_t root_cluster;
 
 
+static inline uint32_t fat_ready(void) {
+    return bps != 0 && spc != 0 && spf != 0;
+}
+
 void init_bpb() {
     bpb = &BPB;
 
@@ -60,6 +64,12 @@ void init_bpb() {
     fat1 = bpb->reserved_sectors;
     fat2 = fat1 + spf;
     fss = bpb->fs_info_sector;
+
+    if (!fat_ready()) {
+        printf("FAT init bad: bps=%u spc=%u spf=%u\n", bps, spc, spf);
+        for (;;)
+            __asm__ __volatile__("hlt");
+    }
 }
 
 static inline uint32_t cluster_to_lba(uint32_t cluster) {
@@ -174,6 +184,11 @@ uint32_t find_free_cluster() {
 }
 
 uint32_t get_next_cluster(uint32_t current_cluster) {
+    if (!fat_ready()) {
+        printf("FAT not ready: bps=%u spc=%u spf=%u\n", bps, spc, spf);
+        return 0x0FFFFFFF;
+    }
+
     uint32_t fat_offset = current_cluster * 4U;
     uint32_t fat_sector = fat_start_lba + (fat_offset / bps);
     uint32_t ent_offset = fat_offset % bps;

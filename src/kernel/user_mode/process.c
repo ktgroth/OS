@@ -4,8 +4,6 @@
 #include "../include/libc/memory.h"
 #include "../include/user_mode/process.h"
 
-#define KERNEL_CS   0x08
-#define KERNEL_SS   0x10
 #define USER_CS     0x1B
 #define USER_SS     0x23
 
@@ -13,10 +11,11 @@
 #define PAGE_RW         0x02
 #define PAGE_USER       0x04
 
-#define USER_IMAGE_BASE 0x0000000000400000ULL
-#define USER_STACK_TOP  0x0000000000800000ULL
-#define USER_STACK_SIZE 0x0000000000004000ULL
-#define PAGE_SIZE       0x1000ULL
+#define PAGE_SIZE           0x1000ULL
+#define USER_SLOT_STRIDE    0x00200000ULL
+#define USER_IMAGE_BASE0    0x00400000ULL
+#define USER_STACK_TOP0     0x00600000ULL
+#define USER_STACK_SIZE     0x00004000ULL
 
 static process_t g_process_table[MAX_PROCESSES];
 static process_t *g_current_process = 0;
@@ -30,22 +29,13 @@ static inline uint64_t page_up(uint64_t x) {
     return (x + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
 }
 
-static void process_trampoline(void) {
-    process_t *p = current_process();
-    uint64_t rc = 0;
-
-    if (p && p->entry)
-        rc = p->entry();
-
-    process_mark_exit(rc);
-    for (;;)
-        __asm__ __volatile__("hlt");
-}
-
-static process_t *alloc_slot(void) {
+static process_t *alloc_slot(uint64_t *slot_out) {
     for (uint64_t i = 0; i < MAX_PROCESSES; ++i)
-        if (g_process_table[i].state == PROC_UNUSED)
+        if (g_process_table[i].state == PROC_UNUSED) {
+            if (slot_out)
+                *slot_out = i;
             return &g_process_table[i];
+        }
 
     return 0;
 }
@@ -65,6 +55,7 @@ static void copy_name(char dst[PROCESS_NAME_LEN], const char *src) {
 static int map_user_range(uint64_t va_start, uint64_t len, uint8_t flags) {
     uint64_t start = page_down(va_start);
     uint64_t end = page_up(va_start + len);
+
     for (uint64_t va = start; va < end; va += PAGE_SIZE) {
         void *pa = alloc_physical_page();
         if (!pa)
@@ -81,32 +72,38 @@ process_t *create_user_process_from_image(const uint8_t *image, uint64_t image_s
     if (!image || image_size == 0 || entry_off >= image_size)
         return 0;
 
-    process_t *p = alloc_slot();
+    uint64_t slot = 0;
+    process_t *p = alloc_slot(&slot);
     if (!p)
         return 0;
 
     memset((uint8_t *)p, 0, sizeof(*p));
+    
+    uint64_t user_image_base = USER_IMAGE_BASE0 + slot * USER_SLOT_STRIDE;
+    uint64_t user_stack_top = USER_STACK_TOP0 + slot * USER_SLOT_STRIDE;
+
+    if (!map_user_range(user_image_base, image_size, PAGE_PRESENT | PAGE_RW | PAGE_USER))
+        return 0;
+    if (!map_user_range(user_stack_top - USER_STACK_SIZE, USER_STACK_SIZE, PAGE_PRESENT | PAGE_RW | PAGE_USER))
+        return 0;
+
+    memcpy((uint8_t *)user_image_base, (uint8_t *)image, image_size);
+
     p->pid = g_next_pid++;
     p->state = PROC_RUNNABLE;
     p->cancel_requested = 0;
     p->in_run_queue = 0;
     copy_name(p->name, name);
 
-    if (!map_user_range(USER_IMAGE_BASE, image_size, PAGE_PRESENT | PAGE_RW | PAGE_USER))
-        return 0;
-    if (!map_user_range(USER_STACK_TOP - USER_STACK_SIZE, USER_STACK_SIZE, PAGE_PRESENT | PAGE_RW | PAGE_USER))
-        return 0;
-
-    memcpy((uint8_t *)USER_IMAGE_BASE, (uint8_t *)image, image_size);
+    p->user_image_base = user_image_base;
+    p->user_stack_top = user_stack_top;
 
     memset((uint8_t *)&p->regs, 0, sizeof(p->regs));
-    p->regs.rip = USER_IMAGE_BASE + entry_off;
-    p->regs.rsp = USER_STACK_TOP - 16;
+    p->regs.rip = user_image_base + entry_off;
+    p->regs.rsp = user_stack_top - 16;
     p->regs.cs = USER_CS;
     p->regs.ss = USER_SS;
     p->regs.eflags = 0x202ULL;
-
-    printf("rip=%lx rsp=%lx\n", p->regs.rip, p->regs.rsp);
 
     return p;
 }

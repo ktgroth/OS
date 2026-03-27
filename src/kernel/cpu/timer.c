@@ -25,7 +25,8 @@ __volatile__ uint64_t tick = 0;
 static void timer_callback(registers_t *r) {
     ++tick;
 
-    if (!frame_from_user(r))
+    scheduler_capture_kernel_frame(r);
+    if ((r->cs & 0x03) != 0x03)
         return;
 
     scheduler_on_tick(r);

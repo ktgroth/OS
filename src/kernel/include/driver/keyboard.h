@@ -5,5 +5,6 @@
 #include "../libc/types.h"
 
 void init_keyboard();
+uint8_t keyboard_try_get_line(char *out, uint64_t out_sz);
 
 #endif
