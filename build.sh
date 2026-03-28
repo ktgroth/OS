@@ -1,11 +1,5 @@
 #!/bin/bash
 
-set -euo pipefail
-
-kernel_location=0xC800
-detected_memory=0x1F000
-page_table=0x300000
-
 AS=nasm
 CC=gcc
 LD=ld
@@ -28,7 +22,6 @@ UEFI_CODE="$UEFI/OVMF_CODE.4m.fd"
 UEFI_VARS_TEMPLATE="$UEFI/OVMF_VARS.4m.fd"
 UEFI_VARS_RUNTIME="$BUILD/OVMF_VARS.4m.fd"
 
-INC=gnu-efi/inc
 EFI_LIBDIR=gnu-efi/x86_64/lib
 EFI_GNUDIR=gnu-efi/x86_64/gnuefi
 EFI_LDS=gnu-efi/gnuefi/elf_x86_64_efi.lds
@@ -36,7 +29,7 @@ EFI_CRT=$EFI_GNUDIR/crt0-efi-x86_64.o
 
 AFLAGS="-f elf64"
 CBFLAGS="-std=gnu11 -ffreestanding -fpic -fshort-wchar -fno-stack-protector -mno-red-zone -Wall -Wextra -Werror"
-LBFLAGS="-shared -Bsymbolic -L$EFI_LIBDIR -L$EFI_GNUDIR -T$EFI_LDS $EFI_CRT"
+LBFLAGS="-nostdlib -znocombreloc -shared -Bsymbolic -L$EFI_LIBDIR -L$EFI_GNUDIR -T$EFI_LDS $EFI_CRT"
 
 CKFLAGS="-ffreestanding -fno-stack-protector -mno-red-zone -fno-pic -fno-pie -mcmodel=kernel -m64 -Wall -Wextra -Werror"
 LKFLAGS="-nostdlib -T$KERNEL/kernel.ld"
@@ -54,7 +47,7 @@ function all {
     mkdir -p $OBJ $BUILD $OBOOT $BUILD/tmp
 
     $CC $CBFLAGS \
-        -I$INC \
+        -Ignu-efi/inc \
         -c $BOOT/main.c -o $OBJ/main_efi.o
     $LD $LBFLAGS $OBJ/main_efi.o \
         --start-group -lgnuefi -lefi --end-group \
@@ -75,13 +68,14 @@ function all {
 
     $AS $AFLAGS $KERNEL/entry.s -o $OBJ/entry.s.o
     $LD $LKFLAGS $OBJ/entry.s.o ${OBJS[@]} -o "$BUILD/kernel.elf"
+    cp "$BUILD/kernel.elf" "$ESP/kernel.elf"
 }
 
 function run {
     all
     cp "$UEFI/OVMF_VARS.4m.fd" "$VARS_RUNTIME"
 
-    TMPDIR="$BUILD/tmp" qemu-system-x86_64 \
+    qemu-system-x86_64 \
         -machine q35 \
         -accel tcg \
         -cpu max \
@@ -90,7 +84,7 @@ function run {
         -drive format=raw,file=fat:rw:$ESP \
         -monitor stdio \
         -serial file:serial.log \
-        -m 16G
+        -m 2G
 }
 
 function build {

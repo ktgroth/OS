@@ -8,15 +8,15 @@ typedef struct {
     uint64_t size;
     uint32_t width;
     uint32_t height;
-    uint32_t pixels_per_scanline;
-    uint32_t pixel_format;
+    uint32_t ppl;
+    uint32_t format;
 } framebuffer_info_t;
 
 typedef struct {
     uint64_t ptr;
     uint64_t size;
     uint64_t desc_size;
-    uint64_t desc_version;
+    uint64_t desc_ver;
 } memory_map_info_t;
 
 typedef struct {
