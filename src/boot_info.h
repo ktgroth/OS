@@ -4,13 +4,13 @@
 #include "types.h"
 
 typedef struct {
-    uint64_t base;
+    uint64_t *base;
     uint64_t size;
     uint32_t width;
     uint32_t height;
     uint32_t ppl;
     uint32_t format;
-} framebuffer_info_t;
+} framebuffer_info_t, framebuffer_t;
 
 typedef struct {
     uint64_t ptr;

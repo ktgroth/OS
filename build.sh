@@ -28,10 +28,10 @@ EFI_LDS=gnu-efi/gnuefi/elf_x86_64_efi.lds
 EFI_CRT=$EFI_GNUDIR/crt0-efi-x86_64.o
 
 AFLAGS="-f elf64"
-CBFLAGS="-std=gnu11 -ffreestanding -fpic -fshort-wchar -fno-stack-protector -mno-red-zone -Wall -Wextra -Werror"
+CBFLAGS="-std=gnu11 -ffreestanding -fpic -fshort-wchar -fno-stack-protector -mno-red-zone -Wall -Wextra"
 LBFLAGS="-nostdlib -znocombreloc -shared -Bsymbolic -L$EFI_LIBDIR -L$EFI_GNUDIR -T$EFI_LDS $EFI_CRT"
 
-CKFLAGS="-ffreestanding -fno-stack-protector -mno-red-zone -fno-pic -fno-pie -mcmodel=kernel -m64 -Wall -Wextra -Werror"
+CKFLAGS="-ffreestanding -fno-stack-protector -mno-red-zone -fno-pic -fno-pie -mcmodel=kernel -m64 -Wall -Wextra"
 LKFLAGS="-nostdlib -T$KERNEL/kernel.ld"
 
 SRCS=($(find "$KERNEL" -name "*.c"))

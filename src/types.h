@@ -11,7 +11,7 @@ typedef unsigned short  uint16_t;
 typedef unsigned int    uint32_t;
 typedef unsigned long   uint64_t;
 
-// typedef uint8_t         bool;
+typedef uint8_t         bool;
 
 typedef float           float32_t;
 typedef double          float64_t;
