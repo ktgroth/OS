@@ -50,6 +50,7 @@ for src in "${SRCS[@]}"; do
 done
 
 function all {
+    clean
     mkdir -p $OBJ $BUILD $OBOOT $BUILD/tmp
 
     $CC $CBFLAGS \
