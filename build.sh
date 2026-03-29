@@ -67,7 +67,13 @@ function all {
     done
 
     $AS $AFLAGS $KERNEL/entry.s -o $OBJ/entry.s.o
-    $LD $LKFLAGS $OBJ/entry.s.o ${OBJS[@]} -o "$BUILD/kernel.elf"
+    $AS $AFLAGS $KERNEL/cpu/gdt_load.s -o $OBJ/gdt_load.s.o
+    $AS $AFLAGS $KERNEL/cpu/idt_load.s -o $OBJ/ldt_load.s.o
+    $AS $AFLAGS $KERNEL/cpu/isr_stub.s -o $OBJ/isr_stub.s.o
+    $LD $LKFLAGS \
+        $OBJ/entry.s.o $OBJ/gdt_load.s.o $OBJ/ldt_load.s.o $OBJ/isr_stub.s.o \
+        ${OBJS[@]} \
+        -o "$BUILD/kernel.elf"
     cp "$BUILD/kernel.elf" "$ESP/kernel.elf"
 }
 
@@ -84,6 +90,8 @@ function run {
         -drive format=raw,file=fat:rw:$ESP \
         -monitor stdio \
         -serial file:serial.log \
+        -no-reboot \
+        -no-shutdown \
         -m 2G
 }
 

@@ -22,9 +22,14 @@ void init_fb(framebuffer_t fb) {
 
 void fb_set_pixel(uint32_t x, uint32_t y, uint32_t color) {
     color = format_color(color);
-
     uint32_t stride = g_fb.ppl;
     g_fb.base[y * stride + x] = color;
+}
+
+void fb_clear(uint32_t color) {
+    for (uint32_t y = 0; y < g_fb.height; ++y)
+        for (uint32_t x = 0; x < g_fb.width; ++x)
+            fb_set_pixel(x, y, color);
 }
 
 void fb_draw_line(uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1, uint32_t color) {
