@@ -179,7 +179,7 @@ static EFI_STATUS read_entire_file(EFI_FILE_HANDLE file, VOID **out_buf, UINTN *
 static BOOLEAN validate_elf64(const VOID *image, UINTN size) {
     const elf64_ehdr_t *eh = (const elf64_ehdr_t *)image;
     UINT64 ph_end;
-    
+
     if (size < sizeof(elf64_ehdr_t))
         return FALSE;
 

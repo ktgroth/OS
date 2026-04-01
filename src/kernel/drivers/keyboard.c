@@ -38,5 +38,5 @@ void keyboard_callback(interrupt_frame_t *frame) {
     (void)frame;
     uint8_t sc = inb(0x60);
 
-    fb_draw_line(0, 0, sc, sc, 0xFFFFFF);
+
 }
