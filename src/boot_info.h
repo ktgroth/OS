@@ -4,7 +4,7 @@
 #include "types.h"
 
 typedef struct {
-    uint64_t *base;
+    uint32_t *base;
     uint64_t size;
     uint32_t width;
     uint32_t height;

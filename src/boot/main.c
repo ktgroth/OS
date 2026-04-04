@@ -294,7 +294,7 @@ static VOID fill_framebuffer_info(boot_info_t *bi) {
     if (EFI_ERROR(status) || gop == NULL || gop->Mode == NULL || gop->Mode->Info == NULL)
         return;
 
-    bi->fb.base = (uint64_t *)gop->Mode->FrameBufferBase;
+    bi->fb.base = (uint32_t *)(UINTN)gop->Mode->FrameBufferBase;
     bi->fb.size = (uint64_t)gop->Mode->FrameBufferSize;
     bi->fb.width = gop->Mode->Info->HorizontalResolution;
     bi->fb.height = gop->Mode->Info->VerticalResolution;

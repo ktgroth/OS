@@ -23,7 +23,7 @@ void init_fb(framebuffer_t fb) {
 void fb_set_pixel(uint32_t x, uint32_t y, uint32_t color) {
     color = format_color(color);
     uint32_t stride = g_fb.ppl;
-    g_fb.base[y * stride + x] = color;
+    ((volatile uint32_t *)g_fb.base)[y * stride + x] = color;
 }
 
 void fb_clear(uint32_t color) {
